@@ -133,17 +133,9 @@ int render(canvas *c)
         //TODO: call it buffer instead or something
         current = packets[context];
 
-//        create_wand(&w, current);
-        dmatag = current->data;
-        q = dmatag;
-        q++;
-//        clear(&w, c);
-        q = clear(q, c);
-//        use_wand(&w);
-        DMATAG_END(dmatag, (q-current->data)-1, 0, 0, 0);
-        dma_wait_fast();
-        dma_channel_send_chain(DMA_CHANNEL_GIF, current->data, q - current->data, 0, 0);
-
+        create_wand(&w, current);
+        clear2(&w, c);
+        use_wand(&w);
 
 
         dmatag = current->data;

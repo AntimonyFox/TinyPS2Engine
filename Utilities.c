@@ -77,18 +77,20 @@ qword_t * clear(qword_t *q, canvas *c)
     return q;
 }
 
-//void clear(wand *w, canvas *c)
-//{
-//    qword_t *q = w->q;
-//
-//    framebuffer_t *frame = &c->frame;
-//    zbuffer_t *z = &c->z;
-//    color_t *cc = &c->clear_color;
-//
-//    q = draw_disable_tests(q, 0, z);
-//    q = draw_clear(q, 0, 2048.0f-frame->width/2, 2048.0f-frame->height/2, frame->width, frame->height, cc->r, cc->g, cc->b);
-//    q = draw_enable_tests(q, 0, z);
-//}
+void clear2(wand *w, canvas *c)
+{
+    qword_t *q = w->q;
+
+    framebuffer_t *frame = &c->frame;
+    zbuffer_t *z = &c->z;
+    color_t *cc = &c->clear_color;
+
+    q = draw_disable_tests(q, 0, z);
+    q = draw_clear(q, 0, 2048.0f-frame->width/2, 2048.0f-frame->height/2, frame->width, frame->height, cc->r, cc->g, cc->b);
+    q = draw_enable_tests(q, 0, z);
+
+    w->q = q;
+}
 
 void create_wand(wand *w, packet_t *packet)
 {
