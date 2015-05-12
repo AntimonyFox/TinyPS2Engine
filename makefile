@@ -16,7 +16,7 @@ PS2SDK=$PS2DEV/ps2sdk
 PATH=$PATH:$PS2SDK/bin
 
 EE_BIN = cube.elf
-EE_OBJS = cube.o
+EE_OBJS = main.o
 EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma
 
 all: $(EE_BIN)
