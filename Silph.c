@@ -88,7 +88,7 @@ int render(canvas *c)
 //    color_t *colors;
 
     prim_t prim;
-    color_t color;
+//    color_t color;
 
     // The data packets for double buffering dma sends.
     packet_t *packets[2];
@@ -99,12 +99,25 @@ int render(canvas *c)
 
     memory m;
 
+    geometry g;
+    g.vertex_count = vertex_count;
+    g.vertices = vertices;
+    g.colors = colors;
+    g.index_count = points_count;
+    g.indices = points;
+
     packets[0] = create_packet(100);
     packets[1] = create_packet(100);
 
     m.temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
     m.verts  = make_buffer(sizeof(vertex_t), vertex_count);
     m.colors = make_buffer(sizeof(color_t), vertex_count);
+    //TODO: what does this do?
+//    m.color.r = 0x80;
+//    m.color.g = 0x80;
+//    m.color.b = 0x80;
+//    m.color.a = 0x80;
+//    m.color.q = 1.0f;
 
     // Define the triangle primitive we want to use.
     prim.type = PRIM_TRIANGLE;
@@ -115,14 +128,6 @@ int render(canvas *c)
     prim.antialiasing = DRAW_ENABLE;
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
-
-
-    // ~~ White
-    color.r = 0x80;
-    color.g = 0x80;
-    color.b = 0x80;
-    color.a = 0x80;
-    color.q = 1.0f;
 
 //    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
     frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -5.00f, 5.00f, 1.00f, 2000.00f);
@@ -140,19 +145,21 @@ int render(canvas *c)
         use_wand(&w);
 
 
+
+        create_CAM(CAM, camera_position, camera_rotation);
+
+
+
         create_wand(&w, current);
 
-        //Object transformations
         object_position[0] = -15.000f;
         object_rotation[0] += 0.008f;
         object_rotation[1] += 0.012f;
 
         create_MV(MV, object_position, object_rotation);
-        create_CAM(CAM, camera_position, camera_rotation);
         create_FINAL(FINAL, MV, CAM, P);
 
-
-        drawObject(&w, &m, FINAL, vertex_count, vertices, colors, points_count, points, &prim, &color);
+        drawObject(&w, &m, FINAL, &g, &prim);
         use_wand(&w);
 
 
@@ -166,49 +173,11 @@ int render(canvas *c)
         object_rotation[1] += 0.012f;
 
         create_MV(MV, object_position, object_rotation);
-        create_CAM(CAM, camera_position, camera_rotation);
         create_FINAL(FINAL, MV, CAM, P);
 
-
-        drawObject(&w, &m, FINAL, vertex_count, vertices, colors, points_count, points, &prim, &color);
+        drawObject(&w, &m, FINAL, &g, &prim);
         use_wand(&w);
 
-
-
-
-//        dmatag = current->data;
-//        q = dmatag;
-//        q++;
-//
-//        //Object transformations
-//        object_position[0] = 15.000f;
-//        object_rotation[0] += 0.008f; //while (object_rotation[0] > 3.14f) { object_rotation[0] -= 6.28f; }
-//        object_rotation[1] += 0.012f; //while (object_rotation[1] > 3.14f) { object_rotation[1] -= 6.28f; }
-//
-//        create_local_world(MV, object_position, object_rotation);
-//        create_world_view(CAM, camera_position, camera_rotation);
-//
-//        create_local_screen(FINAL, MV, CAM, P);
-//
-//        calculate_vertices(temp_vertices, vertex_count, vertices, FINAL);
-//
-//        draw_convert_xyz(verts, 2048, 2048, 32, vertex_count, (vertex_f_t*)temp_vertices);
-//        draw_convert_rgbq(colors, vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)colours, 0x80);
-//
-//        //drawElements
-//        q = draw_prim_start(q, 0, &prim, &color);
-//        for(i = 0; i < points_count; i++)
-//        {
-//            q->dw[0] = colors[points[i]].rgbaq;
-//            q->dw[1] = verts[points[i]].xyz;
-//            q++;
-//        }
-//        q = draw_prim_end(q, 2, DRAW_RGBAQ_REGLIST);
-//
-//        q = draw_finish(q);
-//        DMATAG_END(dmatag, (q-current->data)-1, 0, 0, 0);
-//        dma_wait_fast();
-//        dma_channel_send_chain(DMA_CHANNEL_GIF, current->data, q - current->data, 0, 0);
 
 
 

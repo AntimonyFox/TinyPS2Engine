@@ -117,29 +117,38 @@ typedef struct {
     VECTOR *temp_vertices;
     xyz_t *verts;
     color_t *colors;
+    color_t color;
 } memory;
 
-void drawObject(wand *w, memory *m, MATRIX FINAL, int vertex_count, VECTOR *vertices, VECTOR *v_colors, int index_count, int *indices, prim_t *prim, color_t *color)
+typedef struct {
+    int vertex_count;
+    VECTOR *vertices;
+    VECTOR *colors;
+    int index_count;
+    int *indices;
+} geometry;
+
+void drawObject(wand *w, memory *m, MATRIX FINAL, geometry *g, prim_t *prim)
 {
     int i;
     VECTOR *temp_vertices = m->temp_vertices;
     xyz_t *verts = m->verts;
     color_t *colors = m->colors;
+    color_t *color = &m->color;
 
-    calculate_vertices(temp_vertices, vertex_count, vertices, FINAL);
+    calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);
 
-    draw_convert_xyz(verts, 2048, 2048, 32, vertex_count, (vertex_f_t*)temp_vertices);
-    draw_convert_rgbq(colors, vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)v_colors, 0x80);
+    draw_convert_xyz(verts, 2048, 2048, 32, g->vertex_count, (vertex_f_t*)temp_vertices);
+    draw_convert_rgbq(colors, g->vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)g->colors, 0x80);
 
 
 
     w->q = draw_prim_start(w->q, 0, prim, color);
-    //TODO: reuse i?
-    for(i = 0; i < index_count; i++)
+    for(i = 0; i < g->index_count; i++)
     {
         //TODO: probably this
-        w->q->dw[0] = colors[indices[i]].rgbaq;
-        w->q->dw[1] = verts[indices[i]].xyz;
+        w->q->dw[0] = colors[g->indices[i]].rgbaq;
+        w->q->dw[1] = verts[g->indices[i]].xyz;
         w->q++;
     }
     w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
