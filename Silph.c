@@ -73,9 +73,6 @@ void create_canvas(canvas *c, int width, int height)
 int render(canvas *c)
 {
 
-    framebuffer_t *frame = &c->frame;
-    zbuffer_t *z = &c->z;
-
     int i;
     int context = 0;
 
@@ -85,26 +82,27 @@ int render(canvas *c)
     MATRIX CAM;
     MATRIX FINAL;
 
+    //These things should maybe be hidden
     VECTOR *temp_vertices;
+    xyz_t   *verts;
+    color_t *colors;
 
     prim_t prim;
     color_t color;
-
-    xyz_t   *verts;
-    color_t *colors;
 
     // The data packets for double buffering dma sends.
     packet_t *packets[2];
     packet_t *current;
     qword_t *q;
     qword_t *dmatag;
+    wand w;
 
-    packets[0] = packet_init(100,PACKET_NORMAL);
-    packets[1] = packet_init(100,PACKET_NORMAL);
+    packets[0] = create_packet(100);
+    packets[1] = create_packet(100);
 
-    temp_vertices = memalign(128, sizeof(VECTOR) * vertex_count);
-    verts  = memalign(128, sizeof(vertex_t) * vertex_count);
-    colors = memalign(128, sizeof(color_t)  * vertex_count);
+    temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
+    verts  = make_buffer(sizeof(vertex_t), vertex_count);
+    colors = make_buffer(sizeof(color_t), vertex_count);
 
     // Define the triangle primitive we want to use.
     prim.type = PRIM_TRIANGLE;
@@ -116,6 +114,7 @@ int render(canvas *c)
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
 
+
     // ~~ White
     color.r = 0x80;
     color.g = 0x80;
@@ -123,24 +122,24 @@ int render(canvas *c)
     color.a = 0x80;
     color.q = 1.0f;
 
-    create_view_screen(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
+//    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
+    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -5.00f, 5.00f, 1.00f, 2000.00f);
 
-    dma_wait_fast();
+    wait();
 
     // The main loop...
     for (;;)
     {
+        //TODO: call it buffer instead or something
         current = packets[context];
 
+//        create_wand(&w, current);
         dmatag = current->data;
         q = dmatag;
         q++;
-
-        //gl.clear
-        q = draw_disable_tests(q, 0, z);
-        q = draw_clear(q, 0, 2048.0f-frame->width/2, 2048.0f-frame->height/2, frame->width, frame->height, 0x00, 0x00, 0x00);
-        q = draw_enable_tests(q, 0, z);
-
+//        clear(&w, c);
+        q = clear(q, c);
+//        use_wand(&w);
         DMATAG_END(dmatag, (q-current->data)-1, 0, 0, 0);
         dma_wait_fast();
         dma_channel_send_chain(DMA_CHANNEL_GIF, current->data, q - current->data, 0, 0);
@@ -244,6 +243,7 @@ void startup(int width, int height)
     //TODO: can this be the one to produce the canvas?
     canvas c;
     create_canvas(&c, width, height);
+    clear_color(&c, 0x80, 0, 0x80);
 
     // Render the cube
     render(&c);
