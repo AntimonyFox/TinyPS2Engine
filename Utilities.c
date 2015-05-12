@@ -64,20 +64,7 @@ typedef struct {
     qword_t *q;
 } wand;
 
-qword_t * clear(qword_t *q, canvas *c)
-{
-    framebuffer_t *frame = &c->frame;
-    zbuffer_t *z = &c->z;
-    color_t *cc = &c->clear_color;
-
-    q = draw_disable_tests(q, 0, z);
-    q = draw_clear(q, 0, 2048.0f-frame->width/2, 2048.0f-frame->height/2, frame->width, frame->height, cc->r, cc->g, cc->b);
-    q = draw_enable_tests(q, 0, z);
-
-    return q;
-}
-
-void clear2(wand *w, canvas *c)
+void clear(wand *w, canvas *c)
 {
     qword_t *q = w->q;
 
@@ -109,4 +96,53 @@ void use_wand(wand *w)
     DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
     dma_wait_fast();
     dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+}
+
+void create_MV(MATRIX MV, VECTOR translation, VECTOR rotation)
+{
+    create_local_world(MV, translation, rotation);
+}
+
+void create_CAM(MATRIX CAM, VECTOR translation, VECTOR rotation)
+{
+    create_world_view(CAM, translation, rotation);
+}
+
+void create_FINAL(MATRIX FINAL, MATRIX MV, MATRIX CAM, MATRIX P)
+{
+    create_local_screen(FINAL, MV, CAM, P);
+}
+
+typedef struct {
+    VECTOR *temp_vertices;
+    xyz_t *verts;
+    color_t *colors;
+} memory;
+
+void drawObject(wand *w, memory *m, MATRIX FINAL, int vertex_count, VECTOR *vertices, VECTOR *v_colors, int index_count, int *indices, prim_t *prim, color_t *color)
+{
+    int i;
+    VECTOR *temp_vertices = m->temp_vertices;
+    xyz_t *verts = m->verts;
+    color_t *colors = m->colors;
+
+    calculate_vertices(temp_vertices, vertex_count, vertices, FINAL);
+
+    draw_convert_xyz(verts, 2048, 2048, 32, vertex_count, (vertex_f_t*)temp_vertices);
+    draw_convert_rgbq(colors, vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)v_colors, 0x80);
+
+
+
+    w->q = draw_prim_start(w->q, 0, prim, color);
+    //TODO: reuse i?
+    for(i = 0; i < index_count; i++)
+    {
+        //TODO: probably this
+        w->q->dw[0] = colors[indices[i]].rgbaq;
+        w->q->dw[1] = verts[indices[i]].xyz;
+        w->q++;
+    }
+    w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
+
+    w->q = draw_finish(w->q);
 }

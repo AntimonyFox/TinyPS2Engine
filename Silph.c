@@ -73,7 +73,7 @@ void create_canvas(canvas *c, int width, int height)
 int render(canvas *c)
 {
 
-    int i;
+//    int i;
     int context = 0;
 
     // Matrices to setup the 3D environment and camera
@@ -83,9 +83,9 @@ int render(canvas *c)
     MATRIX FINAL;
 
     //These things should maybe be hidden
-    VECTOR *temp_vertices;
-    xyz_t   *verts;
-    color_t *colors;
+//    VECTOR *temp_vertices;
+//    xyz_t   *verts;
+//    color_t *colors;
 
     prim_t prim;
     color_t color;
@@ -93,16 +93,18 @@ int render(canvas *c)
     // The data packets for double buffering dma sends.
     packet_t *packets[2];
     packet_t *current;
-    qword_t *q;
-    qword_t *dmatag;
+//    qword_t *q;
+//    qword_t *dmatag;
     wand w;
+
+    memory m;
 
     packets[0] = create_packet(100);
     packets[1] = create_packet(100);
 
-    temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
-    verts  = make_buffer(sizeof(vertex_t), vertex_count);
-    colors = make_buffer(sizeof(color_t), vertex_count);
+    m.temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
+    m.verts  = make_buffer(sizeof(vertex_t), vertex_count);
+    m.colors = make_buffer(sizeof(color_t), vertex_count);
 
     // Define the triangle primitive we want to use.
     prim.type = PRIM_TRIANGLE;
@@ -134,43 +136,42 @@ int render(canvas *c)
         current = packets[context];
 
         create_wand(&w, current);
-        clear2(&w, c);
+        clear(&w, c);
         use_wand(&w);
 
 
-        dmatag = current->data;
-        q = dmatag;
-        q++;
+        create_wand(&w, current);
 
         //Object transformations
         object_position[0] = -15.000f;
-        object_rotation[0] += 0.008f; //while (object_rotation[0] > 3.14f) { object_rotation[0] -= 6.28f; }
-        object_rotation[1] += 0.012f; //while (object_rotation[1] > 3.14f) { object_rotation[1] -= 6.28f; }
+        object_rotation[0] += 0.008f;
+        object_rotation[1] += 0.012f;
 
-        create_local_world(MV, object_position, object_rotation);
-        create_world_view(CAM, camera_position, camera_rotation);
+        create_MV(MV, object_position, object_rotation);
+        create_CAM(CAM, camera_position, camera_rotation);
+        create_FINAL(FINAL, MV, CAM, P);
 
-        create_local_screen(FINAL, MV, CAM, P);
 
-        calculate_vertices(temp_vertices, vertex_count, vertices, FINAL);
+        drawObject(&w, &m, FINAL, vertex_count, vertices, colors, points_count, points, &prim, &color);
+        use_wand(&w);
 
-        draw_convert_xyz(verts, 2048, 2048, 32, vertex_count, (vertex_f_t*)temp_vertices);
-        draw_convert_rgbq(colors, vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)colours, 0x80);
 
-        //drawElements
-        q = draw_prim_start(q, 0, &prim, &color);
-        for(i = 0; i < points_count; i++)
-        {
-            q->dw[0] = colors[points[i]].rgbaq;
-            q->dw[1] = verts[points[i]].xyz;
-            q++;
-        }
-        q = draw_prim_end(q, 2, DRAW_RGBAQ_REGLIST);
 
-        q = draw_finish(q);
-        DMATAG_END(dmatag, (q-current->data)-1, 0, 0, 0);
-        dma_wait_fast();
-        dma_channel_send_chain(DMA_CHANNEL_GIF, current->data, q - current->data, 0, 0);
+
+
+        create_wand(&w, current);
+
+        object_position[0] = 15.000f;
+        object_rotation[0] += 0.008f;
+        object_rotation[1] += 0.012f;
+
+        create_MV(MV, object_position, object_rotation);
+        create_CAM(CAM, camera_position, camera_rotation);
+        create_FINAL(FINAL, MV, CAM, P);
+
+
+        drawObject(&w, &m, FINAL, vertex_count, vertices, colors, points_count, points, &prim, &color);
+        use_wand(&w);
 
 
 
