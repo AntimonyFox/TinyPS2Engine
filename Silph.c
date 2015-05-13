@@ -47,6 +47,7 @@ void create_canvas(canvas *c, int width, int height)
 
     framebuffer_t *frame = &c->frame;
     zbuffer_t *z = &c->z;
+    memory *m = &c->memory;
 
     // Define a 32-bit 640x512 framebuffer.
     frame->width = width;
@@ -62,6 +63,22 @@ void create_canvas(canvas *c, int width, int height)
     z->zsm = GS_ZBUF_32;
     z->address = graph_vram_allocate(frame->width,frame->height,z->zsm, GRAPH_ALIGN_PAGE);
 
+    // Create workspace
+    //TODO: set the vertex_count to the largest geometry's vertex count
+    m->temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
+    m->verts  = make_buffer(sizeof(vertex_t), vertex_count);
+    m->colors = make_buffer(sizeof(color_t), vertex_count);
+    //TODO: what does this do?
+//    m->color.r = 0x80;
+//    m->color.g = 0x80;
+//    m->color.b = 0x80;
+//    m->color.a = 0x80;
+//    m->color.q = 1.0f;
+
+    // Create double-buffer
+    c->buffers[0] = create_packet(100);
+    c->buffers[1] = create_packet(100);
+
     // Initialize the screen and tie the first framebuffer to the read circuits.
     graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
 
@@ -73,31 +90,13 @@ void create_canvas(canvas *c, int width, int height)
 int render(canvas *c)
 {
 
-//    int i;
-    int context = 0;
-
     // Matrices to setup the 3D environment and camera
     MATRIX P;
     MATRIX MV;
     MATRIX CAM;
     MATRIX FINAL;
 
-    //These things should maybe be hidden
-//    VECTOR *temp_vertices;
-//    xyz_t   *verts;
-//    color_t *colors;
-
     prim_t prim;
-//    color_t color;
-
-    // The data packets for double buffering dma sends.
-    packet_t *packets[2];
-    packet_t *current;
-//    qword_t *q;
-//    qword_t *dmatag;
-    wand w;
-
-    memory m;
 
     geometry g;
     g.vertex_count = vertex_count;
@@ -106,18 +105,6 @@ int render(canvas *c)
     g.index_count = points_count;
     g.indices = points;
 
-    packets[0] = create_packet(100);
-    packets[1] = create_packet(100);
-
-    m.temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
-    m.verts  = make_buffer(sizeof(vertex_t), vertex_count);
-    m.colors = make_buffer(sizeof(color_t), vertex_count);
-    //TODO: what does this do?
-//    m.color.r = 0x80;
-//    m.color.g = 0x80;
-//    m.color.b = 0x80;
-//    m.color.a = 0x80;
-//    m.color.q = 1.0f;
 
     // Define the triangle primitive we want to use.
     prim.type = PRIM_TRIANGLE;
@@ -129,7 +116,6 @@ int render(canvas *c)
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
 
-//    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
     frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -5.00f, 5.00f, 1.00f, 2000.00f);
 
     wait();
@@ -137,12 +123,8 @@ int render(canvas *c)
     // The main loop...
     for (;;)
     {
-        //TODO: call it buffer instead or something
-        current = packets[context];
 
-        create_wand(&w, current);
-        clear(&w, c);
-        use_wand(&w);
+        clear(c);
 
 
 
@@ -150,39 +132,47 @@ int render(canvas *c)
 
 
 
-        create_wand(&w, current);
+//        object_rotation[0] += 0.008f;
+        object_rotation[1] += 0.012f;
+
+
+
 
         object_position[0] = -15.000f;
-        object_rotation[0] += 0.008f;
-        object_rotation[1] += 0.012f;
 
-        create_MV(MV, object_position, object_rotation);
+        matrix_unit(MV);
+        object_rotation[1] *= -1.0;
+        matrix_rotate(MV, MV, object_rotation);
+        object_rotation[1] *= -1.0;
+        matrix_translate(MV, MV, object_position);
+        matrix_rotate(MV, MV, object_rotation);
+
         create_FINAL(FINAL, MV, CAM, P);
 
-        drawObject(&w, &m, FINAL, &g, &prim);
-        use_wand(&w);
+        drawObject(c, FINAL, &g, &prim);
 
 
 
 
-
-        create_wand(&w, current);
 
         object_position[0] = 15.000f;
-        object_rotation[0] += 0.008f;
-        object_rotation[1] += 0.012f;
 
-        create_MV(MV, object_position, object_rotation);
+        matrix_unit(MV);
+        object_rotation[1] *= -1.0;
+        matrix_rotate(MV, MV, object_rotation);
+        object_rotation[1] *= -1.0;
+        matrix_translate(MV, MV, object_position);
+        matrix_rotate(MV, MV, object_rotation);
+
         create_FINAL(FINAL, MV, CAM, P);
 
-        drawObject(&w, &m, FINAL, &g, &prim);
-        use_wand(&w);
+        drawObject(c, FINAL, &g, &prim);
 
 
 
 
 
-        context ^= 1;
+        c->current_buffer ^= 1;
 
         draw_wait_finish();
         graph_wait_vsync();
@@ -190,8 +180,8 @@ int render(canvas *c)
     }
 
     // ~~ Free if we're done with the for loop, but we never will be
-    packet_free(packets[0]);
-    packet_free(packets[1]);
+//    packet_free(packets[0]);
+//    packet_free(packets[1]);
 
     return 0;
 

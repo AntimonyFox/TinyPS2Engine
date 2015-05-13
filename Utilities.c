@@ -1,7 +1,24 @@
 typedef struct {
+    VECTOR *temp_vertices;
+    xyz_t *verts;
+    color_t *colors;
+    color_t color;
+} memory;
+
+typedef struct {
+    packet_t *packet;
+    qword_t *dmatag;
+    qword_t *q;
+} wand;
+
+typedef struct {
     framebuffer_t frame;
     zbuffer_t z;
     color_t clear_color;
+    memory memory;
+    packet_t *buffers[2];
+    int current_buffer;
+    wand wand;
 } canvas;
 
 packet_t * create_packet(int size)
@@ -50,6 +67,30 @@ void frustum(MATRIX P, float aspect, float left, float right, float bottom, floa
     create_view_screen(P, aspect, left, right, bottom, top, near, far);
 }
 
+void create_wand(canvas *c)
+{
+    wand *w = &c->wand;
+    packet_t *packet = c->buffers[c->current_buffer];
+
+    w->packet = packet;
+    w->dmatag = packet->data;
+    w->q = w->dmatag;
+    w->q++;
+}
+
+void use_wand(canvas *c)
+{
+    wand *w = &c->wand;
+
+    qword_t *q = w->q;
+    qword_t *dmatag = w->dmatag;
+    packet_t *packet = w->packet;
+
+    DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
+    wait ();
+    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+}
+
 void clear_color(canvas *c, int r, int g, int b)
 {
     color_t *clear_color = &c->clear_color;
@@ -58,14 +99,11 @@ void clear_color(canvas *c, int r, int g, int b)
     clear_color->b = b;
 }
 
-typedef struct {
-    packet_t *packet;
-    qword_t *dmatag;
-    qword_t *q;
-} wand;
-
-void clear(wand *w, canvas *c)
+void clear(canvas *c)
 {
+    create_wand(c);
+
+    wand *w = &c->wand;
     qword_t *q = w->q;
 
     framebuffer_t *frame = &c->frame;
@@ -77,25 +115,8 @@ void clear(wand *w, canvas *c)
     q = draw_enable_tests(q, 0, z);
 
     w->q = q;
-}
 
-void create_wand(wand *w, packet_t *packet)
-{
-    w->packet = packet;
-    w->dmatag = packet->data;
-    w->q = w->dmatag;
-    w->q++;
-}
-
-void use_wand(wand *w)
-{
-    qword_t *q = w->q;
-    qword_t *dmatag = w->dmatag;
-    packet_t *packet = w->packet;
-
-    DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
-    dma_wait_fast();
-    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+    use_wand(c);
 }
 
 void create_MV(MATRIX MV, VECTOR translation, VECTOR rotation)
@@ -114,13 +135,6 @@ void create_FINAL(MATRIX FINAL, MATRIX MV, MATRIX CAM, MATRIX P)
 }
 
 typedef struct {
-    VECTOR *temp_vertices;
-    xyz_t *verts;
-    color_t *colors;
-    color_t color;
-} memory;
-
-typedef struct {
     int vertex_count;
     VECTOR *vertices;
     VECTOR *colors;
@@ -128,9 +142,14 @@ typedef struct {
     int *indices;
 } geometry;
 
-void drawObject(wand *w, memory *m, MATRIX FINAL, geometry *g, prim_t *prim)
+void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
 {
+    create_wand(c);
+
     int i;
+    wand *w = &c->wand;
+    memory *m = &c->memory;
+
     VECTOR *temp_vertices = m->temp_vertices;
     xyz_t *verts = m->verts;
     color_t *colors = m->colors;
@@ -154,4 +173,6 @@ void drawObject(wand *w, memory *m, MATRIX FINAL, geometry *g, prim_t *prim)
     w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
 
     w->q = draw_finish(w->q);
+
+    use_wand(c);
 }
