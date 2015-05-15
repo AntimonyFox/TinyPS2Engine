@@ -32,8 +32,8 @@
 
 
 
-#include "flower.c"
-extern unsigned char flower[];
+#include "bg.c"
+extern unsigned char bg[];
 
 
 
@@ -95,19 +95,19 @@ void create_canvas(canvas *c, int width, int height)
 
 }
 
-void load_texture(texbuffer_t *texbuf)
+void load_texture(texbuffer_t *texbuf, char *)
 {
 
-    packet_t *packet = packet_init(50,PACKET_NORMAL);
+    packet_t *packet = create_packet(50);
 
     qword_t *q = packet->data;
 
     q = packet->data;
 
-    q = draw_texture_transfer(q,flower,256,256,GS_PSM_24,texbuf->address,texbuf->width);
+    q = draw_texture_transfer(q, bg, 256, 256, GS_PSM_24, texbuf->address, texbuf->width);
     q = draw_texture_flush(q);
 
-    dma_channel_send_chain(DMA_CHANNEL_GIF,packet->data, q - packet->data, 0,0);
+    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0,0);
     dma_wait_fast();
 
     packet_free(packet);
@@ -117,7 +117,7 @@ void load_texture(texbuffer_t *texbuf)
 void setup_texture(texbuffer_t *texbuf)
 {
 
-    packet_t *packet = packet_init(10,PACKET_NORMAL);
+    packet_t *packet = packet_init(10, PACKET_NORMAL);
 
     qword_t *q = packet->data;
 
@@ -144,11 +144,11 @@ void setup_texture(texbuffer_t *texbuf)
     clut.load_method = CLUT_NO_LOAD;
     clut.address = 0;
 
-    q = draw_texture_sampling(q,0,&lod);
-    q = draw_texturebuffer(q,0,texbuf,&clut);
+    q = draw_texture_sampling(q, 0, &lod);
+    q = draw_texturebuffer(q, 0, texbuf, &clut);
 
     // Now send the packet, no need to wait since it's the first.
-    dma_channel_send_normal(DMA_CHANNEL_GIF,packet->data,q - packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
     dma_wait_fast();
 
     packet_free(packet);
@@ -194,16 +194,17 @@ int render(canvas *c)
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
 
-    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -5.00f, 5.00f, 1.00f, 2000.00f);
+    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
 
     wait();
 
-    int i, j;
+    int i=0, j=0;
 
     VECTOR scale;
-    scale[0] = 0.75f;
-    scale[1] = 0.75f;
-    scale[2] = 0.75f;
+    float size = 43.5f;
+    scale[0] = size;
+    scale[1] = size/1.33f;
+    scale[2] = size;
 
     // The main loop...
     for (;;)
@@ -215,12 +216,14 @@ int render(canvas *c)
 
         create_CAM(CAM, camera_position, camera_rotation);
 
-        object_rotation[0] += 0.008f;
-        object_rotation[1] += 0.012f;
-        object_rotation[2] += 0.012f;
+//        object_rotation[0] += 0.008f;
+//        object_rotation[1] += 0.012f;
+//        object_rotation[2] += 0.012f;
 
-        for (i = -7; i <= 7; i++) {
-            for (j = -7; j <= 7; j++) {
+//        for (i = -1; i <= 1; i++)
+        {
+//            for (j = -1; j <= 1; j++)
+            {
                 object_position[1] = 15.000f * j;
                 object_position[0] = 15.000f * i;
                 matrix_unit(MV);
