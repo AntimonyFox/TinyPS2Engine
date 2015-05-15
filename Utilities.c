@@ -12,9 +12,20 @@ typedef struct {
 } wand;
 
 typedef struct {
+    int vertex_count;
+    VECTOR *vertices;
+    VECTOR *colors;
+    VECTOR *coordinates;
+    int index_count;
+    int *indices;
+} geometry;
+
+typedef struct {
     framebuffer_t frame;
     zbuffer_t z;
     color_t clear_color;
+    prim_t prim;
+    geometry sprite_geometry;
     packet_t *buffers[2];
     int current_buffer;
     wand wand;
@@ -130,77 +141,33 @@ void create_FINAL(MATRIX FINAL, MATRIX MV, MATRIX CAM, MATRIX P)
 }
 
 typedef struct {
-    int vertex_count;
-    VECTOR *vertices;
-    VECTOR *colors;
-    VECTOR *coordinates;
-    int index_count;
-    int *indices;
-} geometry;
-
-void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
-{
-    int i;
-    u64 *dw;
-    wand *w = &c->wand;
-    memory *m = &c->memory;
-
-    VECTOR *temp_vertices = m->temp_vertices;
-    xyz_t *verts = m->verts;
-    color_t *colors = m->colors;
-    texel_t *coordinates = m->coordinates;
-    color_t *color = &m->color;
-
-    calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);
-
-    draw_convert_xyz(verts, 2048, 2048, 32, g->vertex_count, (vertex_f_t*)temp_vertices);
-    draw_convert_rgbq(colors, g->vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)g->colors, 0x80);
-    draw_convert_st(coordinates, g->vertex_count, (vertex_f_t*)temp_vertices, (texel_f_t*)g->coordinates);
-
-
-
-    dw = (u64*)draw_prim_start(w->q, 0, prim, color);
-//    w->q = draw_prim_start(w->q, 0, prim, color);
-    for(i = 0; i < g->index_count; i++)
-    {
-//        //TODO: probably this
-//        w->q->dw[0] = colors[g->indices[i]].rgbaq;
-//        w->q->dw[1] = verts[g->indices[i]].xyz;
-//        w->q++;
-
-        *dw++ = colors[g->indices[i]].rgbaq;
-        *dw++ = coordinates[g->indices[i]].uv;
-        *dw++ = verts[g->indices[i]].xyz;
-    }
-
-    // Check if we're in middle of a qword or not.
-    if ((u32)dw % 16)
-    {
-
-        *dw++ = 0;
-
-    }
-
-    // Only 3 registers rgbaq/st/xyz were used (standard STQ reglist)
-    w->q = draw_prim_end((qword_t*)dw, 3, DRAW_STQ_REGLIST);
-//    w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
-}
-
-typedef struct {
     clutbuffer_t clut;
     lod_t lod;
     texbuffer_t buffer;
-} texture;
+    float top;
+    float bottom;
+    //TODO
+    float default_width;
+    float default_height;
+} sprite;
 
-void load_texture(texture *t, char *texture, int width, int height)
+typedef struct {
+    sprite *sprite;
+    VECTOR position;
+    float angle;
+} entity;
+
+void load_sprite(sprite *s, char *texture, int width, int height, float top, float bottom)
 {
 
-    texbuffer_t *buffer = &t->buffer;
-
+    texbuffer_t *buffer = &s->buffer;
     buffer->width = width;
     buffer->psm = GS_PSM_24;
     buffer->address = graph_vram_allocate(width, width, GS_PSM_24, GRAPH_ALIGN_BLOCK);
 
+
+    s->top = top;
+    s->bottom = bottom;
 
 
     packet_t *packet = create_packet(50);
@@ -220,8 +187,8 @@ void load_texture(texture *t, char *texture, int width, int height)
 
 
     // Using a texture involves setting up a lot of information.
-    clutbuffer_t *clut = &t->clut;
-    lod_t *lod = &t->lod;
+    clutbuffer_t *clut = &s->clut;
+    lod_t *lod = &s->lod;
 
     lod->calculation = LOD_USE_K;
     lod->max_level = 0;
@@ -243,19 +210,68 @@ void load_texture(texture *t, char *texture, int width, int height)
 
 }
 
-void use_texture(texture *t)
+void use_sprite(sprite *s)
 {
 
     packet_t *packet = packet_init(10, PACKET_NORMAL);
 
     qword_t *q = packet->data;
 
-    q = draw_texture_sampling(q, 0, &t->lod);
-    q = draw_texturebuffer(q, 0, &t->buffer, &t->clut);
+    q = draw_texture_sampling(q, 0, &s->lod);
+    q = draw_texturebuffer(q, 0, &s->buffer, &s->clut);
 
     dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
     dma_wait_fast();
 
     packet_free(packet);
 
+}
+
+void drawObject(canvas *c, MATRIX FINAL, entity *e)
+{
+    int i;
+    u64 *dw;
+    prim_t *prim = &c->prim;
+    geometry *g = &c->sprite_geometry;
+    wand *w = &c->wand;
+    memory *m = &c->memory;
+
+    VECTOR *temp_vertices = m->temp_vertices;
+    xyz_t *verts = m->verts;
+    color_t *colors = m->colors;
+    texel_t *coordinates = m->coordinates;
+    color_t *color = &m->color;
+
+
+
+    // Texture the square with this entity's texture
+    use_sprite(e->sprite);
+
+    // Modify square data for this specific sprite
+    //TODO: maybe this belongs in use_sprite?
+    g->coordinates[0][1] = g->coordinates[1][1] = e->sprite->bottom;
+    g->coordinates[2][1] = g->coordinates[3][1] = e->sprite->top;
+
+
+    calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);
+
+    draw_convert_xyz(verts, 2048, 2048, 32, g->vertex_count, (vertex_f_t*)temp_vertices);
+    draw_convert_rgbq(colors, g->vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)g->colors, 0x80);
+    draw_convert_st(coordinates, g->vertex_count, (vertex_f_t*)temp_vertices, (texel_f_t*)g->coordinates);
+
+
+    dw = (u64*)draw_prim_start(w->q, 0, prim, color);
+    for(i = 0; i < g->index_count; i++)
+    {
+        *dw++ = colors[g->indices[i]].rgbaq;
+        *dw++ = coordinates[g->indices[i]].uv;
+        *dw++ = verts[g->indices[i]].xyz;
+    }
+
+    // Check if we're in middle of a qword or not.
+    if ((u32)dw % 16)
+        *dw++ = 0;
+
+    // Only 3 registers rgbaq/st/xyz were used (standard STQ reglist)
+    w->q = draw_prim_end((qword_t*)dw, 3, DRAW_STQ_REGLIST);
 }

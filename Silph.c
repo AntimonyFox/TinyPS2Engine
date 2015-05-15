@@ -85,6 +85,26 @@ void create_canvas(canvas *c, int width, int height)
 //    m->color.a = 0x80;
 //    m->color.q = 1.0f;
 
+    // Define the triangle primitive we want to use.
+    prim_t *p = &c->prim;
+    p->type = PRIM_TRIANGLE;
+    p->shading = PRIM_SHADE_GOURAUD;
+    p->mapping = DRAW_ENABLE;
+    p->fogging = DRAW_DISABLE;
+    p->blending = DRAW_ENABLE;
+    p->antialiasing = DRAW_DISABLE;
+    p->mapping_type = PRIM_MAP_ST;
+    p->colorfix = PRIM_UNFIXED;
+
+    // Set sprite geometry settings (pulled from mesh_data.c)
+    geometry *g = &c->sprite_geometry;
+    g->vertex_count = vertex_count;
+    g->vertices = vertices;
+    g->colors = colors;
+    g->coordinates = coordinates;
+    g->index_count = points_count;
+    g->indices = points;
+
     // Create double-buffer
     c->buffers[0] = create_packet(3000);
     c->buffers[1] = create_packet(3000);
@@ -106,35 +126,6 @@ int render(canvas *c)
     MATRIX CAM;
     MATRIX FINAL;
 
-    prim_t prim;
-
-    geometry g;
-    g.vertex_count = vertex_count;
-    g.vertices = vertices;
-    g.colors = colors;
-    g.coordinates = coordinates;
-    g.index_count = points_count;
-    g.indices = points;
-
-
-    // Define the triangle primitive we want to use.
-//    prim.type = PRIM_TRIANGLE;
-//    prim.shading = PRIM_SHADE_GOURAUD;
-//    prim.mapping = DRAW_DISABLE;
-//    prim.fogging = DRAW_DISABLE;
-//    prim.blending = DRAW_DISABLE;
-//    prim.antialiasing = DRAW_ENABLE;
-//    prim.mapping_type = PRIM_MAP_ST;
-//    prim.colorfix = PRIM_UNFIXED;
-
-    prim.type = PRIM_TRIANGLE;
-    prim.shading = PRIM_SHADE_GOURAUD;
-    prim.mapping = DRAW_ENABLE;
-    prim.fogging = DRAW_DISABLE;
-    prim.blending = DRAW_ENABLE;
-    prim.antialiasing = DRAW_DISABLE;
-    prim.mapping_type = PRIM_MAP_ST;
-    prim.colorfix = PRIM_UNFIXED;
 
     frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
 
@@ -148,6 +139,26 @@ int render(canvas *c)
     scale[1] = size/1.33f;
     scale[2] = size;
 
+
+
+
+    // Create entities
+    sprite bg_sprite;
+    load_sprite(&bg_sprite, bg, 512, 512, 0.17f, 0.83f);
+    //just in case nothing is loaded
+    use_sprite(&bg_sprite);
+
+    sprite flower_sprite;
+    load_sprite(&flower_sprite, flower, 256, 256, 0.00f, 1.00f);
+
+    entity e_bg;
+    e_bg.sprite = &bg_sprite;
+
+    entity e_flower;
+    e_flower.sprite = &flower_sprite;
+
+
+
     // The main loop...
     for (;;)
     {
@@ -157,6 +168,7 @@ int render(canvas *c)
         clear(c);
 
         create_CAM(CAM, camera_position, camera_rotation);
+
 
 //        object_rotation[0] += 0.008f;
 //        object_rotation[1] += 0.012f;
@@ -173,7 +185,7 @@ int render(canvas *c)
                 matrix_rotate(MV, MV, object_rotation);
                 matrix_translate(MV, MV, object_position);
                 create_FINAL(FINAL, MV, CAM, P);
-                drawObject(c, FINAL, &g, &prim);
+                drawObject(c, FINAL, &e_bg);
             }
         }
 
@@ -203,21 +215,6 @@ void startup(int width, int height)
     canvas c;
     create_canvas(&c, width, height);
     clear_color(&c, 0x80, 0, 0x80);
-
-
-
-    // Load the texture into vram.
-    texture bg_texture;
-    load_texture(&bg_texture, bg, 512, 512);
-
-    texture flower_texture;
-    load_texture(&flower_texture, flower, 256, 256);
-
-    // Use texture buffer
-    use_texture(&bg_texture);
-//    use_texture(&flower_texture);
-
-
 
     // Render the cube
     render(&c);
