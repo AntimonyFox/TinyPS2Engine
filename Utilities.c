@@ -163,7 +163,7 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
     texbuffer_t *buffer = &s->buffer;
     buffer->width = width;
     buffer->psm = GS_PSM_24;
-    buffer->address = graph_vram_allocate(width, width, GS_PSM_24, GRAPH_ALIGN_BLOCK);
+    buffer->address = graph_vram_allocate(width, height, GS_PSM_24, GRAPH_ALIGN_BLOCK);
 
 
     s->top = top;
@@ -210,20 +210,21 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
 }
 
-void use_sprite(sprite *s)
+void use_sprite(canvas *c, sprite *s)
 {
 
-    packet_t *packet = packet_init(10, PACKET_NORMAL);
-
-    qword_t *q = packet->data;
-
+    // Tell renderer to use this sprite's texture
+    wand *w = &c->wand;
+    qword_t *q = w->q;
     q = draw_texture_sampling(q, 0, &s->lod);
     q = draw_texturebuffer(q, 0, &s->buffer, &s->clut);
 
-    dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
-    dma_wait_fast();
+    // Modify the sprite square data to cut out the right amount from the top and bottom to eliminate black space
+    geometry *g = &c->sprite_geometry;
+    g->coordinates[0][1] = g->coordinates[1][1] = s->bottom;
+    g->coordinates[2][1] = g->coordinates[3][1] = s->top;
 
-    packet_free(packet);
+    w->q = q;
 
 }
 
@@ -245,12 +246,8 @@ void drawObject(canvas *c, MATRIX FINAL, entity *e)
 
 
     // Texture the square with this entity's texture
-    use_sprite(e->sprite);
+    use_sprite(c, e->sprite);
 
-    // Modify square data for this specific sprite
-    //TODO: maybe this belongs in use_sprite?
-    g->coordinates[0][1] = g->coordinates[1][1] = e->sprite->bottom;
-    g->coordinates[2][1] = g->coordinates[3][1] = e->sprite->top;
 
 
     calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);

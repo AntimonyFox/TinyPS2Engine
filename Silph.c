@@ -96,7 +96,7 @@ void create_canvas(canvas *c, int width, int height)
     p->mapping_type = PRIM_MAP_ST;
     p->colorfix = PRIM_UNFIXED;
 
-    // Set sprite geometry settings (pulled from mesh_data.c)
+    // Set sprite geometry settings (pulled from square_data.c)
     geometry *g = &c->sprite_geometry;
     g->vertex_count = vertex_count;
     g->vertices = vertices;
@@ -131,8 +131,6 @@ int render(canvas *c)
 
     wait();
 
-    int i=0, j=0;
-
     VECTOR scale;
     float size = 43.5f;
     scale[0] = size;
@@ -140,17 +138,22 @@ int render(canvas *c)
     scale[2] = size;
 
 
+    VECTOR scale2;
+    size = 3.00f;
+    scale2[0] = size;
+    scale2[1] = size;
+    scale2[2] = size;
 
 
-    // Create entities
+
+    // Load textures
     sprite bg_sprite;
     load_sprite(&bg_sprite, bg, 512, 512, 0.17f, 0.83f);
-    //just in case nothing is loaded
-    use_sprite(&bg_sprite);
 
     sprite flower_sprite;
     load_sprite(&flower_sprite, flower, 256, 256, 0.00f, 1.00f);
 
+    // Create entities
     entity e_bg;
     e_bg.sprite = &bg_sprite;
 
@@ -170,24 +173,25 @@ int render(canvas *c)
         create_CAM(CAM, camera_position, camera_rotation);
 
 
-//        object_rotation[0] += 0.008f;
-//        object_rotation[1] += 0.012f;
-//        object_rotation[2] += 0.012f;
 
-//        for (i = -1; i <= 1; i++)
-        {
-//            for (j = -1; j <= 1; j++)
-            {
-                object_position[1] = 15.000f * j;
-                object_position[0] = 15.000f * i;
-                matrix_unit(MV);
-                matrix_scale(MV, MV, scale);
-                matrix_rotate(MV, MV, object_rotation);
-                matrix_translate(MV, MV, object_position);
-                create_FINAL(FINAL, MV, CAM, P);
-                drawObject(c, FINAL, &e_bg);
-            }
-        }
+
+        matrix_unit(MV);
+        matrix_scale(MV, MV, scale);
+        object_rotation[2] = 0.00f;
+        matrix_rotate(MV, MV, object_rotation);
+        matrix_translate(MV, MV, object_position);
+        create_FINAL(FINAL, MV, CAM, P);
+        drawObject(c, FINAL, &e_bg);
+
+        matrix_unit(MV);
+        matrix_scale(MV, MV, scale2);
+        object_rotation[2] = e_flower.angle += 0.012f;
+        matrix_rotate(MV, MV, object_rotation);
+        create_FINAL(FINAL, MV, CAM, P);
+        drawObject(c, FINAL, &e_flower);
+
+
+
 
         use_wand(c);
 
