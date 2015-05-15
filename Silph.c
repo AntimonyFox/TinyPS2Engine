@@ -73,8 +73,9 @@ void create_canvas(canvas *c, int width, int height)
     // Create workspace
     //TODO: set the vertex_count to the largest geometry's vertex count
     m->temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
-    m->verts  = make_buffer(sizeof(vertex_t), vertex_count);
-    m->colors = make_buffer(sizeof(color_t), vertex_count);
+    m->verts  = make_buffer(sizeof(u64), vertex_count);
+    m->colors = make_buffer(sizeof(u64), vertex_count);
+    m->coordinates = make_buffer(sizeof(u64), vertex_count);
     //TODO: what does this do?
 //    m->color.r = 0x80;
 //    m->color.g = 0x80;
@@ -169,17 +170,27 @@ int render(canvas *c)
     g.vertex_count = vertex_count;
     g.vertices = vertices;
     g.colors = colors;
+    g.coordinates = coordinates;
     g.index_count = points_count;
     g.indices = points;
 
 
     // Define the triangle primitive we want to use.
+//    prim.type = PRIM_TRIANGLE;
+//    prim.shading = PRIM_SHADE_GOURAUD;
+//    prim.mapping = DRAW_DISABLE;
+//    prim.fogging = DRAW_DISABLE;
+//    prim.blending = DRAW_DISABLE;
+//    prim.antialiasing = DRAW_ENABLE;
+//    prim.mapping_type = PRIM_MAP_ST;
+//    prim.colorfix = PRIM_UNFIXED;
+
     prim.type = PRIM_TRIANGLE;
     prim.shading = PRIM_SHADE_GOURAUD;
-    prim.mapping = DRAW_DISABLE;
+    prim.mapping = DRAW_ENABLE;
     prim.fogging = DRAW_DISABLE;
-    prim.blending = DRAW_DISABLE;
-    prim.antialiasing = DRAW_ENABLE;
+    prim.blending = DRAW_ENABLE;
+    prim.antialiasing = DRAW_DISABLE;
     prim.mapping_type = PRIM_MAP_ST;
     prim.colorfix = PRIM_UNFIXED;
 
@@ -190,9 +201,9 @@ int render(canvas *c)
     int i, j;
 
     VECTOR scale;
-    scale[0] = 0.25f;
-    scale[1] = 0.25f;
-    scale[2] = 0.25f;
+    scale[0] = 0.75f;
+    scale[1] = 0.75f;
+    scale[2] = 0.75f;
 
     // The main loop...
     for (;;)
@@ -210,8 +221,8 @@ int render(canvas *c)
 
         for (i = -7; i <= 7; i++) {
             for (j = -7; j <= 7; j++) {
-                object_position[1] = 5.000f * j;
-                object_position[0] = 5.000f * i;
+                object_position[1] = 15.000f * j;
+                object_position[0] = 15.000f * i;
                 matrix_unit(MV);
                 matrix_scale(MV, MV, scale);
                 matrix_rotate(MV, MV, object_rotation);

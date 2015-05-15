@@ -2,6 +2,7 @@ typedef struct {
     VECTOR *temp_vertices;
     xyz_t *verts;
     color_t *colors;
+    texel_t *coordinates;
     color_t color;
 } memory;
 
@@ -88,9 +89,10 @@ void use_wand(canvas *c)
     packet_t *packet = w->packet;
 
     q = draw_finish(q);
-    DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
+//    DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
     wait ();
-    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+//    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+    dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
 }
 
 void clear_color(canvas *c, int r, int g, int b)
@@ -136,6 +138,7 @@ typedef struct {
     int vertex_count;
     VECTOR *vertices;
     VECTOR *colors;
+    VECTOR *coordinates;
     int index_count;
     int *indices;
 } geometry;
@@ -143,28 +146,47 @@ typedef struct {
 void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
 {
     int i;
+    u64 *dw;
     wand *w = &c->wand;
     memory *m = &c->memory;
 
     VECTOR *temp_vertices = m->temp_vertices;
     xyz_t *verts = m->verts;
     color_t *colors = m->colors;
+    texel_t *coordinates = m->coordinates;
     color_t *color = &m->color;
 
     calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);
 
     draw_convert_xyz(verts, 2048, 2048, 32, g->vertex_count, (vertex_f_t*)temp_vertices);
     draw_convert_rgbq(colors, g->vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)g->colors, 0x80);
+    draw_convert_st(coordinates, g->vertex_count, (vertex_f_t*)temp_vertices, (texel_f_t*)g->coordinates);
 
 
 
-    w->q = draw_prim_start(w->q, 0, prim, color);
+    dw = (u64*)draw_prim_start(w->q, 0, prim, color);
+//    w->q = draw_prim_start(w->q, 0, prim, color);
     for(i = 0; i < g->index_count; i++)
     {
-        //TODO: probably this
-        w->q->dw[0] = colors[g->indices[i]].rgbaq;
-        w->q->dw[1] = verts[g->indices[i]].xyz;
-        w->q++;
+//        //TODO: probably this
+//        w->q->dw[0] = colors[g->indices[i]].rgbaq;
+//        w->q->dw[1] = verts[g->indices[i]].xyz;
+//        w->q++;
+
+        *dw++ = colors[g->indices[i]].rgbaq;
+        *dw++ = coordinates[g->indices[i]].uv;
+        *dw++ = verts[g->indices[i]].xyz;
     }
-    w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
+
+    // Check if we're in middle of a qword or not.
+    if ((u32)dw % 16)
+    {
+
+        *dw++ = 0;
+
+    }
+
+    // Only 3 registers rgbaq/st/xyz were used (standard STQ reglist)
+    w->q = draw_prim_end((qword_t*)dw, 3, DRAW_STQ_REGLIST);
+//    w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
 }
