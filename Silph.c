@@ -28,7 +28,7 @@
 #include <draw3d.h>
 
 #include "Utilities.c"
-#include "mesh_data.c"
+#include "square_data.c"
 
 VECTOR object_position = { 0.00f, 0.00f, 0.00f, 1.00f };
 VECTOR object_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
@@ -76,8 +76,8 @@ void create_canvas(canvas *c, int width, int height)
 //    m->color.q = 1.0f;
 
     // Create double-buffer
-    c->buffers[0] = create_packet(100);
-    c->buffers[1] = create_packet(100);
+    c->buffers[0] = create_packet(3000);
+    c->buffers[1] = create_packet(3000);
 
     // Initialize the screen and tie the first framebuffer to the read circuits.
     graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
@@ -120,57 +120,41 @@ int render(canvas *c)
 
     wait();
 
+    int i, j;
+
+    VECTOR scale;
+    scale[0] = 0.25f;
+    scale[1] = 0.25f;
+    scale[2] = 0.25f;
+
     // The main loop...
     for (;;)
     {
 
+        create_wand(c);
+
         clear(c);
-
-
 
         create_CAM(CAM, camera_position, camera_rotation);
 
-
-
-//        object_rotation[0] += 0.008f;
+        object_rotation[0] += 0.008f;
         object_rotation[1] += 0.012f;
+        object_rotation[2] += 0.012f;
 
+        for (i = -7; i <= 7; i++) {
+            for (j = -7; j <= 7; j++) {
+                object_position[1] = 5.000f * j;
+                object_position[0] = 5.000f * i;
+                matrix_unit(MV);
+                matrix_scale(MV, MV, scale);
+                matrix_rotate(MV, MV, object_rotation);
+                matrix_translate(MV, MV, object_position);
+                create_FINAL(FINAL, MV, CAM, P);
+                drawObject(c, FINAL, &g, &prim);
+            }
+        }
 
-
-
-        object_position[0] = -15.000f;
-
-        matrix_unit(MV);
-        object_rotation[1] *= -1.0;
-        matrix_rotate(MV, MV, object_rotation);
-        object_rotation[1] *= -1.0;
-        matrix_translate(MV, MV, object_position);
-        matrix_rotate(MV, MV, object_rotation);
-
-        create_FINAL(FINAL, MV, CAM, P);
-
-        drawObject(c, FINAL, &g, &prim);
-
-
-
-
-
-        object_position[0] = 15.000f;
-
-        matrix_unit(MV);
-        object_rotation[1] *= -1.0;
-        matrix_rotate(MV, MV, object_rotation);
-        object_rotation[1] *= -1.0;
-        matrix_translate(MV, MV, object_position);
-        matrix_rotate(MV, MV, object_rotation);
-
-        create_FINAL(FINAL, MV, CAM, P);
-
-        drawObject(c, FINAL, &g, &prim);
-
-
-
-
+        use_wand(c);
 
         c->current_buffer ^= 1;
 

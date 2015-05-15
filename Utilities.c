@@ -15,10 +15,11 @@ typedef struct {
     framebuffer_t frame;
     zbuffer_t z;
     color_t clear_color;
-    memory memory;
     packet_t *buffers[2];
     int current_buffer;
     wand wand;
+    //this has to be last and no one knows why
+    memory memory;
 } canvas;
 
 packet_t * create_packet(int size)
@@ -86,6 +87,7 @@ void use_wand(canvas *c)
     qword_t *dmatag = w->dmatag;
     packet_t *packet = w->packet;
 
+    q = draw_finish(q);
     DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
     wait ();
     dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
@@ -101,8 +103,6 @@ void clear_color(canvas *c, int r, int g, int b)
 
 void clear(canvas *c)
 {
-    create_wand(c);
-
     wand *w = &c->wand;
     qword_t *q = w->q;
 
@@ -115,8 +115,6 @@ void clear(canvas *c)
     q = draw_enable_tests(q, 0, z);
 
     w->q = q;
-
-    use_wand(c);
 }
 
 void create_MV(MATRIX MV, VECTOR translation, VECTOR rotation)
@@ -144,8 +142,6 @@ typedef struct {
 
 void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
 {
-    create_wand(c);
-
     int i;
     wand *w = &c->wand;
     memory *m = &c->memory;
@@ -171,8 +167,4 @@ void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
         w->q++;
     }
     w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
-
-    w->q = draw_finish(w->q);
-
-    use_wand(c);
 }
