@@ -19,11 +19,14 @@ EE_BIN = cube.elf
 EE_OBJS = main.o
 EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma
 
-all: $(EE_BIN)
+all: flower.c $(EE_BIN)
 	ee-strip --strip-all $(EE_BIN)
 
+flower.c:
+	bin2c texture.raw flower.c flower
+
 clean:
-	rm -f *.elf *.o *.a
+	rm -f *.elf *.o *.a flower.c
 
 run: $(EE_BIN)
 	ps2client execee host:$(EE_BIN)
@@ -33,4 +36,3 @@ reset:
 
 include Makefile.pref
 include Makefile.eeglobal
-

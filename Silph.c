@@ -30,6 +30,13 @@
 #include "Utilities.c"
 #include "square_data.c"
 
+
+
+#include "flower.c"
+extern unsigned char flower[];
+
+
+
 VECTOR object_position = { 0.00f, 0.00f, 0.00f, 1.00f };
 VECTOR object_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
 
@@ -84,6 +91,66 @@ void create_canvas(canvas *c, int width, int height)
 
     // Register canvas with the coprocessor
     register_canvas(c);
+
+}
+
+void load_texture(texbuffer_t *texbuf)
+{
+
+    packet_t *packet = packet_init(50,PACKET_NORMAL);
+
+    qword_t *q = packet->data;
+
+    q = packet->data;
+
+    q = draw_texture_transfer(q,flower,256,256,GS_PSM_24,texbuf->address,texbuf->width);
+    q = draw_texture_flush(q);
+
+    dma_channel_send_chain(DMA_CHANNEL_GIF,packet->data, q - packet->data, 0,0);
+    dma_wait_fast();
+
+    packet_free(packet);
+
+}
+
+void setup_texture(texbuffer_t *texbuf)
+{
+
+    packet_t *packet = packet_init(10,PACKET_NORMAL);
+
+    qword_t *q = packet->data;
+
+    // Using a texture involves setting up a lot of information.
+    clutbuffer_t clut;
+
+    lod_t lod;
+
+    lod.calculation = LOD_USE_K;
+    lod.max_level = 0;
+    lod.mag_filter = LOD_MAG_NEAREST;
+    lod.min_filter = LOD_MIN_NEAREST;
+    lod.l = 0;
+    lod.k = 0;
+
+    texbuf->info.width = draw_log2(256);
+    texbuf->info.height = draw_log2(256);
+    texbuf->info.components = TEXTURE_COMPONENTS_RGB;
+    texbuf->info.function = TEXTURE_FUNCTION_DECAL;
+
+    clut.storage_mode = CLUT_STORAGE_MODE1;
+    clut.start = 0;
+    clut.psm = 0;
+    clut.load_method = CLUT_NO_LOAD;
+    clut.address = 0;
+
+    q = draw_texture_sampling(q,0,&lod);
+    q = draw_texturebuffer(q,0,texbuf,&clut);
+
+    // Now send the packet, no need to wait since it's the first.
+    dma_channel_send_normal(DMA_CHANNEL_GIF,packet->data,q - packet->data, 0, 0);
+    dma_wait_fast();
+
+    packet_free(packet);
 
 }
 
@@ -180,6 +247,22 @@ void startup(int width, int height)
     canvas c;
     create_canvas(&c, width, height);
     clear_color(&c, 0x80, 0, 0x80);
+
+
+
+    texbuffer_t texbuf;
+    texbuf.width = 256;
+    texbuf.psm = GS_PSM_24;
+    texbuf.address = graph_vram_allocate(256,256,GS_PSM_24,GRAPH_ALIGN_BLOCK);
+
+    // Load the texture into vram.
+    load_texture(&texbuf);
+
+    // Setup texture buffer
+    setup_texture(&texbuf);
+
+
+
 
     // Render the cube
     render(&c);
