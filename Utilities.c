@@ -8,7 +8,6 @@ typedef struct {
 
 typedef struct {
     packet_t *packet;
-    qword_t *dmatag;
     qword_t *q;
 } wand;
 
@@ -75,8 +74,7 @@ void create_wand(canvas *c)
     packet_t *packet = c->buffers[c->current_buffer];
 
     w->packet = packet;
-    w->dmatag = packet->data;
-    w->q = w->dmatag;
+    w->q = packet->data;
     w->q++;
 }
 
@@ -85,13 +83,10 @@ void use_wand(canvas *c)
     wand *w = &c->wand;
 
     qword_t *q = w->q;
-    qword_t *dmatag = w->dmatag;
     packet_t *packet = w->packet;
 
     q = draw_finish(q);
-//    DMATAG_END(dmatag, (q - packet->data)-1, 0, 0, 0);
     wait ();
-//    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
     dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
 }
 
@@ -189,4 +184,78 @@ void drawObject(canvas *c, MATRIX FINAL, geometry *g, prim_t *prim)
     // Only 3 registers rgbaq/st/xyz were used (standard STQ reglist)
     w->q = draw_prim_end((qword_t*)dw, 3, DRAW_STQ_REGLIST);
 //    w->q = draw_prim_end(w->q, 2, DRAW_RGBAQ_REGLIST);
+}
+
+typedef struct {
+    clutbuffer_t clut;
+    lod_t lod;
+    texbuffer_t buffer;
+} texture;
+
+void load_texture(texture *t, char *texture, int width, int height)
+{
+
+    texbuffer_t *buffer = &t->buffer;
+
+    buffer->width = width;
+    buffer->psm = GS_PSM_24;
+    buffer->address = graph_vram_allocate(width, width, GS_PSM_24, GRAPH_ALIGN_BLOCK);
+
+
+
+    packet_t *packet = create_packet(50);
+
+    qword_t *q = packet->data;
+
+    q = packet->data;
+
+    q = draw_texture_transfer(q, texture, width, height, GS_PSM_24, buffer->address, buffer->width);
+    q = draw_texture_flush(q);
+
+    dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0,0);
+    dma_wait_fast();
+
+    packet_free(packet);
+
+
+
+    // Using a texture involves setting up a lot of information.
+    clutbuffer_t *clut = &t->clut;
+    lod_t *lod = &t->lod;
+
+    lod->calculation = LOD_USE_K;
+    lod->max_level = 0;
+    lod->mag_filter = LOD_MAG_NEAREST;
+    lod->min_filter = LOD_MIN_NEAREST;
+    lod->l = 0;
+    lod->k = 0;
+
+    clut->storage_mode = CLUT_STORAGE_MODE1;
+    clut->start = 0;
+    clut->psm = 0;
+    clut->load_method = CLUT_NO_LOAD;
+    clut->address = 0;
+
+    buffer->info.width = draw_log2(width);
+    buffer->info.height = draw_log2(height);
+    buffer->info.components = TEXTURE_COMPONENTS_RGB;
+    buffer->info.function = TEXTURE_FUNCTION_DECAL;
+
+}
+
+void use_texture(texture *t)
+{
+
+    packet_t *packet = packet_init(10, PACKET_NORMAL);
+
+    qword_t *q = packet->data;
+
+    q = draw_texture_sampling(q, 0, &t->lod);
+    q = draw_texturebuffer(q, 0, &t->buffer, &t->clut);
+
+    dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+    dma_wait_fast();
+
+    packet_free(packet);
+
 }

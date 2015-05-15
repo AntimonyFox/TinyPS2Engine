@@ -19,14 +19,17 @@ EE_BIN = cube.elf
 EE_OBJS = main.o
 EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma
 
-all: bg.c $(EE_BIN)
+all: bg.c flower.c $(EE_BIN)
 	ee-strip --strip-all $(EE_BIN)
 
 bg.c:
-	bin2c bg2.raw bg.c bg
+	bin2c textures/bg.raw bg.c bg
+
+flower.c:
+	bin2c textures/flower.raw flower.c flower
 
 clean:
-	rm -f *.elf *.o *.a bg.c
+	rm -f *.elf *.o *.a bg.c flower.c
 
 run: $(EE_BIN)
 	ps2client execee host:$(EE_BIN)
