@@ -4,6 +4,10 @@ typedef struct {
     color_t *colors;
     texel_t *coordinates;
     color_t color;
+    MATRIX P;
+    MATRIX MV;
+    MATRIX CAM;
+    MATRIX FINAL;
 } memory;
 
 typedef struct {
@@ -74,9 +78,9 @@ void * make_buffer(int element_size, int vertex_count)
     return memalign(128, element_size * vertex_count);
 }
 
-void frustum(MATRIX P, float aspect, float left, float right, float bottom, float top, float near, float far)
+void set_frustum(canvas *c, float aspect, float left, float right, float bottom, float top, float near, float far)
 {
-    create_view_screen(P, aspect, left, right, bottom, top, near, far);
+    create_view_screen(c->memory.P, aspect, left, right, bottom, top, near, far);
 }
 
 void create_wand(canvas *c)
@@ -99,9 +103,13 @@ void use_wand(canvas *c)
     q = draw_finish(q);
     wait ();
     dma_channel_send_normal(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0, 0);
+
+    // Sync processors
+    draw_wait_finish();
+    graph_wait_vsync();
 }
 
-void clear_color(canvas *c, int r, int g, int b)
+void set_clear_color(canvas *c, int r, int g, int b)
 {
     color_t *clear_color = &c->clear_color;
     clear_color->r = r;
@@ -144,30 +152,47 @@ typedef struct {
     clutbuffer_t clut;
     lod_t lod;
     texbuffer_t buffer;
+    float left;
+    float right;
     float top;
     float bottom;
-    //TODO
-    float default_width;
-    float default_height;
+    MATRIX SCALE;
 } sprite;
 
 typedef struct {
     sprite *sprite;
     VECTOR position;
+    VECTOR scale;
     float angle;
 } entity;
 
-void load_sprite(sprite *s, char *texture, int width, int height, float top, float bottom)
+sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_width, int sprite_height, int left_offset, int top_offset)
 {
 
-    texbuffer_t *buffer = &s->buffer;
-    buffer->width = width;
+    sprite s;
+
+    texbuffer_t *buffer = &s.buffer;
+    buffer->width = raw_width;
     buffer->psm = GS_PSM_32;
-    buffer->address = graph_vram_allocate(width, height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
+    buffer->address = graph_vram_allocate(raw_width, raw_height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
 
 
-    s->top = top;
-    s->bottom = bottom;
+
+    s.top = top_offset / (float)raw_height;
+    s.bottom = (top_offset + sprite_height) / (float)raw_height;
+
+    s.left = left_offset / (float)raw_width;
+    s.right = (left_offset + sprite_width) / (float)raw_width;
+
+    float max = (raw_width > raw_height) ? raw_width : raw_height;
+    float default_width = sprite_width / max;
+    float default_height = sprite_height / max;
+
+    VECTOR scale = { default_width, default_height, 1 };
+    MATRIX *SCALE = &s.SCALE;
+    matrix_unit(*SCALE);
+    matrix_scale(*SCALE, *SCALE, scale);
+
 
 
     packet_t *packet = create_packet(50);
@@ -176,7 +201,7 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
     q = packet->data;
 
-    q = draw_texture_transfer(q, texture, width, height, GS_PSM_32, buffer->address, buffer->width);
+    q = draw_texture_transfer(q, texture, raw_width, raw_height, GS_PSM_32, buffer->address, buffer->width);
     q = draw_texture_flush(q);
 
     dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0,0);
@@ -187,8 +212,8 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
 
     // Using a texture involves setting up a lot of information.
-    clutbuffer_t *clut = &s->clut;
-    lod_t *lod = &s->lod;
+    clutbuffer_t *clut = &s.clut;
+    lod_t *lod = &s.lod;
 
     lod->calculation = LOD_USE_K;
     lod->max_level = 0;
@@ -203,10 +228,12 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
     clut->load_method = CLUT_NO_LOAD;
     clut->address = 0;
 
-    buffer->info.width = draw_log2(width);
-    buffer->info.height = draw_log2(height);
+    buffer->info.width = draw_log2(raw_width);
+    buffer->info.height = draw_log2(raw_height);
     buffer->info.components = TEXTURE_COMPONENTS_RGBA;
     buffer->info.function = TEXTURE_FUNCTION_DECAL;
+
+    return s;
 
 }
 
@@ -221,6 +248,9 @@ void use_sprite(canvas *c, sprite *s)
 
     // Modify the sprite square data to cut out the right amount from the top and bottom to eliminate black space
     geometry *g = &c->sprite_geometry;
+    g->coordinates[0][0] = g->coordinates[2][0] = s->left;
+    g->coordinates[1][0] = g->coordinates[3][0] = s->right;
+
     g->coordinates[0][1] = g->coordinates[1][1] = s->bottom;
     g->coordinates[2][1] = g->coordinates[3][1] = s->top;
 
@@ -228,7 +258,7 @@ void use_sprite(canvas *c, sprite *s)
 
 }
 
-void drawObject(canvas *c, MATRIX FINAL, entity *e)
+void drawObject(canvas *c, entity *e)
 {
     int i;
     u64 *dw;
@@ -250,7 +280,23 @@ void drawObject(canvas *c, MATRIX FINAL, entity *e)
 
 
 
-    calculate_vertices(temp_vertices, g->vertex_count, g->vertices, FINAL);
+    // Apply transformations
+    MATRIX *P = &c->memory.P;
+    MATRIX *MV = &c->memory.MV;
+    MATRIX *CAM = &c->memory.CAM;
+    MATRIX *FINAL = &c->memory.FINAL;
+
+    matrix_unit(*MV);
+    matrix_multiply(*MV, *MV, e->sprite->SCALE);
+    matrix_scale(*MV, *MV, e->scale);
+    VECTOR rotation = { 0, 0, e->angle };
+    matrix_rotate(*MV, *MV, rotation);
+    matrix_translate(*MV, *MV, e->position);
+    create_FINAL(*FINAL, *MV, *CAM, *P);
+
+
+
+    calculate_vertices(temp_vertices, g->vertex_count, g->vertices, *FINAL);
 
     draw_convert_xyz(verts, 2048, 2048, 32, g->vertex_count, (vertex_f_t*)temp_vertices);
     draw_convert_rgbq(colors, g->vertex_count, (vertex_f_t*)temp_vertices, (color_f_t*)g->colors, 0x80);
@@ -271,4 +317,13 @@ void drawObject(canvas *c, MATRIX FINAL, entity *e)
 
     // Only 3 registers rgbaq/st/xyz were used (standard STQ reglist)
     w->q = draw_prim_end((qword_t*)dw, 3, DRAW_STQ_REGLIST);
+}
+
+entity create_entity(sprite *s)
+{
+    entity e;
+    e.sprite = s;
+    e.scale[0] = e.scale[1] = 1;
+    e.angle = 0;
+    return e;
 }

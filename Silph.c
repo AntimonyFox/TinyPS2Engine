@@ -33,9 +33,11 @@
 
 
 #include "bg.c"
-#include "flower.c"
 extern unsigned char bg[];
+#include "flower.c"
 extern unsigned char flower[];
+#include "player_0_0.c"
+extern unsigned char player_0_0[];
 
 
 
@@ -51,12 +53,14 @@ void init_dma()
     dma_channel_fast_waits(DMA_CHANNEL_GIF);
 }
 
-void create_canvas(canvas *c, int width, int height)
+canvas create_canvas(int width, int height)
 {
 
-    framebuffer_t *frame = &c->frame;
-    zbuffer_t *z = &c->z;
-    memory *m = &c->memory;
+    canvas c;
+
+    framebuffer_t *frame = &c.frame;
+    zbuffer_t *z = &c.z;
+    memory *m = &c.memory;
 
     // Define a 32-bit 640x512 framebuffer.
     frame->width = width;
@@ -86,7 +90,7 @@ void create_canvas(canvas *c, int width, int height)
 //    m->color.q = 1.0f;
 
     // Define the triangle primitive we want to use.
-    prim_t *p = &c->prim;
+    prim_t *p = &c.prim;
     p->type = PRIM_TRIANGLE;
     p->shading = PRIM_SHADE_GOURAUD;
     p->mapping = DRAW_ENABLE;
@@ -97,7 +101,7 @@ void create_canvas(canvas *c, int width, int height)
     p->colorfix = PRIM_UNFIXED;
 
     // Set sprite geometry settings (pulled from square_data.c)
-    geometry *g = &c->sprite_geometry;
+    geometry *g = &c.sprite_geometry;
     g->vertex_count = vertex_count;
     g->vertices = vertices;
     g->colors = colors;
@@ -106,99 +110,75 @@ void create_canvas(canvas *c, int width, int height)
     g->indices = points;
 
     // Create double-buffer
-    c->buffers[0] = create_packet(3000);
-    c->buffers[1] = create_packet(3000);
+    c.buffers[0] = create_packet(3000);
+    c.buffers[1] = create_packet(3000);
 
     // Initialize the screen and tie the first framebuffer to the read circuits.
     graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
 
     // Register canvas with the coprocessor
-    register_canvas(c);
+    register_canvas(&c);
+
+    return c;
 
 }
 
 int render(canvas *c)
 {
 
-    // Matrices to setup the 3D environment and camera
-    MATRIX P;
-    MATRIX MV;
-    MATRIX CAM;
-    MATRIX FINAL;
+    // Matrices to set up the 3D environment and camera
+    MATRIX *CAM = &c->memory.CAM;
 
 
-    frustum(P, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
+    // Create perspective
+    set_frustum(c, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
 
     wait();
-
-    VECTOR scale;
-    float size = 43.5f;
-    scale[0] = size;
-    scale[1] = size/1.33f;
-    scale[2] = size;
-
-
-    VECTOR scale2;
-    size = 3.00f;
-    scale2[0] = size;
-    scale2[1] = size;
-    scale2[2] = size;
 
 
 
     // Load textures
-    sprite bg_sprite;
-    load_sprite(&bg_sprite, bg, 512, 512, 0.17f, 0.83f);
-
-    sprite flower_sprite;
-    load_sprite(&flower_sprite, flower, 256, 256, 0.00f, 1.00f);
+    sprite bg_sprite = load_sprite(bg, 512, 512, 512, 384, 0, 64);
+    sprite flower_sprite = load_sprite(flower, 256, 256, 240, 149, 9, 59);
+    sprite player_0_0_s = load_sprite(player_0_0, 128, 64, 89, 44, 19, 10);
 
     // Create entities
-    entity e_bg;
-    e_bg.sprite = &bg_sprite;
+    entity e_bg = create_entity(&bg_sprite);
+    e_bg.scale[0] = 43.5f;
+    e_bg.scale[1] = 43.5f;
 
-    entity e_flower;
-    e_flower.sprite = &flower_sprite;
-
+    entity e_player_0_0 = create_entity(&player_0_0_s);
+    e_player_0_0.scale[0] = 5;
+    e_player_0_0.scale[1] = 5;
 
 
     // The main loop...
     for (;;)
     {
 
+        // Begin drawing
         create_wand(c);
 
+        // Clear screen
         clear(c);
 
-        create_CAM(CAM, camera_position, camera_rotation);
+        // Update camera
+        create_CAM(*CAM, camera_position, camera_rotation);
 
 
 
+        // Draw objects
+        drawObject(c, &e_bg);
 
-        matrix_unit(MV);
-        matrix_scale(MV, MV, scale);
-        object_rotation[2] = 0.00f;
-        matrix_rotate(MV, MV, object_rotation);
-        matrix_translate(MV, MV, object_position);
-        create_FINAL(FINAL, MV, CAM, P);
-        drawObject(c, FINAL, &e_bg);
-
-        matrix_unit(MV);
-        matrix_scale(MV, MV, scale2);
-        object_rotation[2] = e_flower.angle += 0.012f;
-        matrix_rotate(MV, MV, object_rotation);
-        create_FINAL(FINAL, MV, CAM, P);
-        drawObject(c, FINAL, &e_flower);
+        e_player_0_0.angle += 0.012f;
+        drawObject(c, &e_player_0_0);
 
 
 
-
+        // End drawing
         use_wand(c);
 
         c->current_buffer ^= 1;
-
-        draw_wait_finish();
-        graph_wait_vsync();
 
     }
 
@@ -215,10 +195,8 @@ void startup(int width, int height)
 
     init_dma();
 
-    //TODO: can this be the one to produce the canvas?
-    canvas c;
-    create_canvas(&c, width, height);
-    clear_color(&c, 0x80, 0, 0x80);
+    canvas c = create_canvas(width, height);
+    set_clear_color(&c, 0x80, 0, 0x80);
 
     // Render the cube
     render(&c);
