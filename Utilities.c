@@ -162,8 +162,8 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
     texbuffer_t *buffer = &s->buffer;
     buffer->width = width;
-    buffer->psm = GS_PSM_24;
-    buffer->address = graph_vram_allocate(width, height, GS_PSM_24, GRAPH_ALIGN_BLOCK);
+    buffer->psm = GS_PSM_32;
+    buffer->address = graph_vram_allocate(width, height, GS_PSM_32, GRAPH_ALIGN_BLOCK);
 
 
     s->top = top;
@@ -176,7 +176,7 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
     q = packet->data;
 
-    q = draw_texture_transfer(q, texture, width, height, GS_PSM_24, buffer->address, buffer->width);
+    q = draw_texture_transfer(q, texture, width, height, GS_PSM_32, buffer->address, buffer->width);
     q = draw_texture_flush(q);
 
     dma_channel_send_chain(DMA_CHANNEL_GIF, packet->data, q - packet->data, 0,0);
@@ -205,7 +205,7 @@ void load_sprite(sprite *s, char *texture, int width, int height, float top, flo
 
     buffer->info.width = draw_log2(width);
     buffer->info.height = draw_log2(height);
-    buffer->info.components = TEXTURE_COMPONENTS_RGB;
+    buffer->info.components = TEXTURE_COMPONENTS_RGBA;
     buffer->info.function = TEXTURE_FUNCTION_DECAL;
 
 }

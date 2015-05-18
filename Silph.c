@@ -91,7 +91,7 @@ void create_canvas(canvas *c, int width, int height)
     p->shading = PRIM_SHADE_GOURAUD;
     p->mapping = DRAW_ENABLE;
     p->fogging = DRAW_DISABLE;
-    p->blending = DRAW_ENABLE;
+    p->blending = DRAW_DISABLE;         //this must be disabled to correctly enable transparency
     p->antialiasing = DRAW_DISABLE;
     p->mapping_type = PRIM_MAP_ST;
     p->colorfix = PRIM_UNFIXED;
