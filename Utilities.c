@@ -350,6 +350,7 @@ void loadPadModules()
 typedef struct {
     int port;
     int slot;
+    struct padButtonStatus buttons;
 } pad;
 
 void waitPadReady(pad *pad)
@@ -363,26 +364,28 @@ void waitPadReady(pad *pad)
     } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
 }
 
-int initializePad(pad *pad, void *padBuf)
+pad initializePad(int port, int slot, void *padBuf)
 {
 
-    int port = pad->port;
-    int slot = pad->slot;
+    pad pad;
+    pad.port = port;
+    pad.slot = slot;
 
 
 
+    // Will break here if there's something wrong with padBuf
     int ret = padPortOpen(port, slot, padBuf);
     if (ret == 0)
-        return 0;
+        SleepThread();
 
 
 
-    waitPadReady(pad);
+    waitPadReady(&pad);
 
     int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
 
     if (numModes == 0)
-        return 1;
+        return pad;
 
     int i;
     for (i = 0; i < numModes; i++) {
@@ -390,21 +393,21 @@ int initializePad(pad *pad, void *padBuf)
             break;
     };
     if (i >= numModes)
-        return 1;
+        return pad;
 
     ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
     if (ret == 0)
-        return 1;
+        return pad;
 
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
-    waitPadReady(pad);
+    waitPadReady(&pad);
     padInfoPressMode(port, slot);
 
-    waitPadReady(pad);
+    waitPadReady(&pad);
     padEnterPressMode(port, slot);
 
-    waitPadReady(pad);
+    waitPadReady(&pad);
     numActuators = padInfoAct(port, slot, -1, 0);
 
     if (numActuators != 0) {
@@ -415,11 +418,16 @@ int initializePad(pad *pad, void *padBuf)
         actAlign[4] = 0xff;
         actAlign[5] = 0xff;
 
-        waitPadReady(pad);
+        waitPadReady(&pad);
         padSetActAlign(port, slot, actAlign);
     }
 
-    waitPadReady(pad);
+    waitPadReady(&pad);
 
-    return 1;
+    return pad;
+}
+
+int update_pad(pad *pad)
+{
+    return padRead(pad->port, pad->slot, &pad->buttons);
 }
