@@ -173,15 +173,13 @@ int render(canvas *c)
     port = 0; // 0 -> Connector 1, 1 -> Connector 2
     slot = 0; // Always zero if not using multitap
 
-    if((ret = padPortOpen(port, slot, padBuf)) == 0) {
-        printf("padOpenPort failed: %d\n", ret);
+    ret = padPortOpen(port, slot, padBuf);
+    if (ret == 0)
         SleepThread();
-    }
 
-    if(!initializePad(port, slot)) {
-        printf("pad initalization failed!\n");
+    ret = initializePad(port, slot);
+    if(ret == 0)
         SleepThread();
-    }
 
 
 
