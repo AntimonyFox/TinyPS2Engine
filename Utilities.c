@@ -351,6 +351,7 @@ typedef struct {
     int port;
     int slot;
     struct padButtonStatus buttons;
+    u32 paddata;
 } pad;
 
 void waitPadReady(pad *pad)
@@ -429,5 +430,7 @@ pad initializePad(int port, int slot, void *padBuf)
 
 int update_pad(pad *pad)
 {
-    return padRead(pad->port, pad->slot, &pad->buttons);
+    int ret = padRead(pad->port, pad->slot, &pad->buttons);
+    pad->paddata = 0xffff ^ pad->buttons.btns;
+    return ret;
 }

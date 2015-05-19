@@ -161,15 +161,12 @@ int render(canvas *c)
 
 
     // Set up pads
-    u32 paddata;
     u32 old_pad = 0;
     u32 new_pad;
 
     loadPadModules();
 
-    int port = 0;
-    int slot = 0;
-    pad pad = initializePad(port, slot, padBuf);
+    pad pad = initializePad(0, 0, padBuf);
 
     int ret = 0;
 
@@ -197,10 +194,8 @@ int render(canvas *c)
         drawObject(c, &e_bg);
 
         if (ret != 0) {
-            paddata = 0xffff ^ pad.buttons.btns;
-
-            new_pad = paddata & ~old_pad;
-            old_pad = paddata;
+            new_pad = pad.paddata & ~old_pad;
+            old_pad = pad.paddata;
 
             float rX = pad.buttons.rjoy_h / 127.0f - 1;
             float rY = -(pad.buttons.rjoy_v / 127.0f - 1);
