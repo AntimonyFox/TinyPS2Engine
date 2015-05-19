@@ -347,30 +347,38 @@ void loadPadModules()
     padInit(0);
 }
 
-int waitPadReady(int port, int slot)
-{
-    int state;
-    int lastState;
-    char stateString[16];
+typedef struct {
+    int port;
+    int slot;
+} pad;
 
-    state = padGetState(port, slot);
-    lastState = -1;
-    while((state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1)) {
-        if (state != lastState) {
-            padStateInt2String(state, stateString);
-            printf("Please wait, pad(%d,%d) is in state %s\n",
-                   port, slot, stateString);
-        }
-        lastState = state;
+int waitPadReady(pad *pad)
+{
+    int port = pad->port;
+    int slot = pad->slot;
+
+    int state = padGetState(port, slot);
+    while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) ) {
         state=padGetState(port, slot);
     }
     return 0;
 }
 
-int initializePad(int port, int slot)
+int initializePad(pad *pad, void *padBuf)
 {
 
-    waitPadReady(port, slot);
+    int port = pad->port;
+    int slot = pad->slot;
+
+
+
+    int ret = padPortOpen(port, slot, padBuf);
+    if (ret == 0)
+        return 0;
+
+
+
+    waitPadReady(pad);
 
     int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
 
@@ -385,19 +393,19 @@ int initializePad(int port, int slot)
     if (i >= numModes)
         return 1;
 
-    int ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
+    ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
     if (ret == 0)
         return 1;
 
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
-    waitPadReady(port, slot);
+    waitPadReady(pad);
     padInfoPressMode(port, slot);
 
-    waitPadReady(port, slot);
+    waitPadReady(pad);
     padEnterPressMode(port, slot);
 
-    waitPadReady(port, slot);
+    waitPadReady(pad);
     numActuators = padInfoAct(port, slot, -1, 0);
 
     if (numActuators != 0) {
@@ -408,11 +416,11 @@ int initializePad(int port, int slot)
         actAlign[4] = 0xff;
         actAlign[5] = 0xff;
 
-        waitPadReady(port, slot);
+        waitPadReady(pad);
         padSetActAlign(port, slot, actAlign);
     }
 
-    waitPadReady(port, slot);
+    waitPadReady(pad);
 
     return 1;
 }

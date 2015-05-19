@@ -162,7 +162,12 @@ int render(canvas *c)
 
     // Set up pads
     int ret;
-    int port, slot;
+
+//    int port, slot;
+    pad pad;
+    pad.port = 0;
+    pad.slot = 0;
+
     struct padButtonStatus buttons;
     u32 paddata;
     u32 old_pad = 0;
@@ -170,18 +175,17 @@ int render(canvas *c)
 
     loadPadModules();
 
-    port = 0; // 0 -> Connector 1, 1 -> Connector 2
-    slot = 0; // Always zero if not using multitap
+//    port = 0; // 0 -> Connector 1, 1 -> Connector 2
+//    slot = 0; // Always zero if not using multitap
 
-    ret = padPortOpen(port, slot, padBuf);
-    if (ret == 0)
-        SleepThread();
-
-    ret = initializePad(port, slot);
+    ret = initializePad(&pad, padBuf);
     if(ret == 0)
         SleepThread();
 
 
+
+    int port = pad.port;
+    int slot = pad.slot;
 
 
     // The main loop...
