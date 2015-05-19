@@ -31,6 +31,15 @@
 #include "square_data.c"
 
 
+// Pad libraries
+#include <sifrpc.h>
+#include <loadfile.h>
+#include <stdio.h>
+#include <math.h>
+
+#include <libpad.h>
+
+
 
 #include "bg.c"
 extern unsigned char bg[];
@@ -41,11 +50,148 @@ extern unsigned char player_0_0[];
 
 
 
-VECTOR object_position = { 0.00f, 0.00f, 0.00f, 1.00f };
-VECTOR object_rotation = { 0.00f, 0.00f, 0.00f, 1.00f };
+
+// pad_dma_buf is provided by the user, one buf for each pad
+// contains the pad's current state
+static char padBuf[256] __attribute__((aligned(64)));
+
+static char actAlign[6];
+static int actuators;
 
 VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
+
+/*
+ * Local functions
+ */
+
+/*
+ * loadModules()
+ */
+void loadModules()
+{
+    int ret;
+
+    ret = SifLoadModule("rom0:SIO2MAN", 0, NULL);
+    if (ret < 0) {
+        SleepThread();
+    }
+
+    ret = SifLoadModule("rom0:PADMAN", 0, NULL);
+    if (ret < 0) {
+        SleepThread();
+    }
+}
+
+int waitPadReady(int port, int slot)
+{
+    int state;
+    int lastState;
+    char stateString[16];
+
+    state = padGetState(port, slot);
+    lastState = -1;
+    while((state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1)) {
+        if (state != lastState) {
+            padStateInt2String(state, stateString);
+            printf("Please wait, pad(%d,%d) is in state %s\n",
+                   port, slot, stateString);
+        }
+        lastState = state;
+        state=padGetState(port, slot);
+    }
+    return 0;
+}
+
+int initializePad(int port, int slot)
+{
+
+    int ret;
+    int modes;
+    int i;
+
+    waitPadReady(port, slot);
+
+    // How many different modes can this device operate in?
+    // i.e. get # entrys in the modetable
+    modes = padInfoMode(port, slot, PAD_MODETABLE, -1);
+    printf("The device has %d modes\n", modes);
+
+    if (modes > 0) {
+        printf("( ");
+        for (i = 0; i < modes; i++) {
+            printf("%d ", padInfoMode(port, slot, PAD_MODETABLE, i));
+        }
+        printf(")");
+    }
+
+    printf("It is currently using mode %d\n",
+           padInfoMode(port, slot, PAD_MODECURID, 0));
+
+    // If modes == 0, this is not a Dual shock controller
+    // (it has no actuator engines)
+    if (modes == 0) {
+        printf("This is a digital controller?\n");
+        return 1;
+    }
+
+    // Verify that the controller has a DUAL SHOCK mode
+    i = 0;
+    do {
+        if (padInfoMode(port, slot, PAD_MODETABLE, i) == PAD_TYPE_DUALSHOCK)
+            break;
+        i++;
+    } while (i < modes);
+    if (i >= modes) {
+        printf("This is no Dual Shock controller\n");
+        return 1;
+    }
+
+    // If ExId != 0x0 => This controller has actuator engines
+    // This check should always pass if the Dual Shock test above passed
+    ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
+    if (ret == 0) {
+        printf("This is no Dual Shock controller??\n");
+        return 1;
+    }
+
+    printf("Enabling dual shock functions\n");
+
+    // When using MMODE_LOCK, user cant change mode with Select button
+    padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
+
+    waitPadReady(port, slot);
+    printf("infoPressMode: %d\n", padInfoPressMode(port, slot));
+
+    waitPadReady(port, slot);
+    printf("enterPressMode: %d\n", padEnterPressMode(port, slot));
+
+    waitPadReady(port, slot);
+    actuators = padInfoAct(port, slot, -1, 0);
+    printf("# of actuators: %d\n",actuators);
+
+    if (actuators != 0) {
+        actAlign[0] = 0;   // Enable small engine
+        actAlign[1] = 1;   // Enable big engine
+        actAlign[2] = 0xff;
+        actAlign[3] = 0xff;
+        actAlign[4] = 0xff;
+        actAlign[5] = 0xff;
+
+        waitPadReady(port, slot);
+        printf("padSetActAlign: %d\n",
+               padSetActAlign(port, slot, actAlign));
+    }
+    else {
+        printf("Did not find any actuators.\n");
+    }
+
+    waitPadReady(port, slot);
+
+    return 1;
+}
+
+
 
 void init_dma()
 {
@@ -139,7 +285,7 @@ int render(canvas *c)
 
     // Load textures
     sprite bg_sprite = load_sprite(bg, 512, 512, 512, 384, 0, 64);
-    sprite flower_sprite = load_sprite(flower, 256, 256, 240, 149, 9, 59);
+//    sprite flower_sprite = load_sprite(flower, 256, 256, 240, 149, 9, 59);
     sprite player_0_0_s = load_sprite(player_0_0, 128, 64, 89, 44, 19, 10);
 
     // Create entities
@@ -152,9 +298,49 @@ int render(canvas *c)
     e_player_0_0.scale[1] = 5;
 
 
+
+    // Set up pads
+    int ret;
+    int port, slot;
+    struct padButtonStatus buttons;
+    u32 paddata;
+    u32 old_pad = 0;
+    u32 new_pad;
+
+    SifInitRpc(0);
+    loadModules();
+    padInit(0);
+
+    port = 0; // 0 -> Connector 1, 1 -> Connector 2
+    slot = 0; // Always zero if not using multitap
+
+    if((ret = padPortOpen(port, slot, padBuf)) == 0) {
+        printf("padOpenPort failed: %d\n", ret);
+        SleepThread();
+    }
+
+    if(!initializePad(port, slot)) {
+        printf("pad initalization failed!\n");
+        SleepThread();
+    }
+
+
+
+
     // The main loop...
     for (;;)
     {
+
+        // Check on pad
+        ret=padGetState(port, slot);
+        while((ret != PAD_STATE_STABLE) && (ret != PAD_STATE_FINDCTP1)) {
+            if(ret==PAD_STATE_DISCONN) {
+                printf("Pad(%d, %d) is disconnected\n", port, slot);
+            }
+            ret=padGetState(port, slot);
+        }
+        ret = padRead(port, slot, &buttons); // port, slot, buttons
+
 
         // Begin drawing
         create_wand(c);
@@ -170,7 +356,28 @@ int render(canvas *c)
         // Draw objects
         drawObject(c, &e_bg);
 
-        e_player_0_0.angle += 0.012f;
+        if (ret != 0) {
+            paddata = 0xffff ^ buttons.btns;
+
+            new_pad = paddata & ~old_pad;
+            old_pad = paddata;
+
+//            if(buttons.rjoy_h > 0xf0)
+            float rX = buttons.rjoy_h / 127.0f - 1;
+            float rY = -(buttons.rjoy_v / 127.0f - 1);
+            if (hypot(rX, rY) > 0.4f)
+                e_player_0_0.angle = (float)atan2(rY, rX);
+
+            // Directions
+            if (new_pad & PAD_LEFT)
+                e_player_0_0.angle = (float)atan2(0, -1);
+            if (new_pad & PAD_RIGHT)
+                e_player_0_0.angle = (float)atan2(0, 1);
+            if (new_pad & PAD_UP)
+                e_player_0_0.angle = (float)atan2(1, 0);
+            if (new_pad & PAD_DOWN)
+                e_player_0_0.angle = (float)atan2(-1, 0);
+        }
         drawObject(c, &e_player_0_0);
 
 

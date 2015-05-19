@@ -17,7 +17,7 @@ PATH=$PATH:$PS2SDK/bin
 
 EE_BIN = cube.elf
 EE_OBJS = main.o
-EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma
+EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma -lpad -lc -lm
 
 all: bg.c flower.c player_0_0.c $(EE_BIN)
 	ee-strip --strip-all $(EE_BIN)
