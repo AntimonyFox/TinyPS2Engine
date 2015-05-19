@@ -352,16 +352,15 @@ typedef struct {
     int slot;
 } pad;
 
-int waitPadReady(pad *pad)
+void waitPadReady(pad *pad)
 {
     int port = pad->port;
     int slot = pad->slot;
 
-    int state = padGetState(port, slot);
-    while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) ) {
+    int state;
+    do {
         state=padGetState(port, slot);
-    }
-    return 0;
+    } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
 }
 
 int initializePad(pad *pad, void *padBuf)
