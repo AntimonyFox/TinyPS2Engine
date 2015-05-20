@@ -161,14 +161,31 @@ int render(canvas *c)
 
 
     // Set up pads
+    int ret;
+
+//    int port, slot;
+    pad pad;
+    pad.port = 0;
+    pad.slot = 0;
+
+    struct padButtonStatus buttons;
+    u32 paddata;
     u32 old_pad = 0;
     u32 new_pad;
 
     loadPadModules();
 
-    pad pad = initializePad(0, 0, padBuf);
+//    port = 0; // 0 -> Connector 1, 1 -> Connector 2
+//    slot = 0; // Always zero if not using multitap
 
-    int ret = 0;
+    ret = initializePad(&pad, padBuf);
+    if(ret == 0)
+        SleepThread();
+
+
+
+    int port = pad.port;
+    int slot = pad.slot;
 
 
     // The main loop...
@@ -176,8 +193,15 @@ int render(canvas *c)
     {
 
         // Check on pad
-        waitPadReady(&pad);
-        ret = update_pad(&pad);
+        ret=padGetState(port, slot);
+        while((ret != PAD_STATE_STABLE) && (ret != PAD_STATE_FINDCTP1)) {
+            if(ret==PAD_STATE_DISCONN) {
+                printf("Pad(%d, %d) is disconnected\n", port, slot);
+            }
+            ret=padGetState(port, slot);
+        }
+        ret = padRead(port, slot, &buttons); // port, slot, buttons
+
 
         // Begin drawing
         create_wand(c);
@@ -194,11 +218,14 @@ int render(canvas *c)
         drawObject(c, &e_bg);
 
         if (ret != 0) {
-            new_pad = pad.paddata & ~old_pad;
-            old_pad = pad.paddata;
+            paddata = 0xffff ^ buttons.btns;
 
-            float rX = pad.buttons.rjoy_h / 127.0f - 1;
-            float rY = -(pad.buttons.rjoy_v / 127.0f - 1);
+            new_pad = paddata & ~old_pad;
+            old_pad = paddata;
+
+//            if(buttons.rjoy_h > 0xf0)
+            float rX = buttons.rjoy_h / 127.0f - 1;
+            float rY = -(buttons.rjoy_v / 127.0f - 1);
             if (hypot(rX, rY) > 0.4f)
                 e_player_0_0.angle = (float)atan2(rY, rX);
 

@@ -350,8 +350,6 @@ void loadPadModules()
 typedef struct {
     int port;
     int slot;
-    struct padButtonStatus buttons;
-    u32 paddata;
 } pad;
 
 void waitPadReady(pad *pad)
@@ -365,28 +363,26 @@ void waitPadReady(pad *pad)
     } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
 }
 
-pad initializePad(int port, int slot, void *padBuf)
+int initializePad(pad *pad, void *padBuf)
 {
 
-    pad pad;
-    pad.port = port;
-    pad.slot = slot;
+    int port = pad->port;
+    int slot = pad->slot;
 
 
 
-    // Will break here if there's something wrong with padBuf
     int ret = padPortOpen(port, slot, padBuf);
     if (ret == 0)
-        SleepThread();
+        return 0;
 
 
 
-    waitPadReady(&pad);
+    waitPadReady(pad);
 
     int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
 
     if (numModes == 0)
-        return pad;
+        return 1;
 
     int i;
     for (i = 0; i < numModes; i++) {
@@ -394,21 +390,21 @@ pad initializePad(int port, int slot, void *padBuf)
             break;
     };
     if (i >= numModes)
-        return pad;
+        return 1;
 
     ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
     if (ret == 0)
-        return pad;
+        return 1;
 
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
-    waitPadReady(&pad);
+    waitPadReady(pad);
     padInfoPressMode(port, slot);
 
-    waitPadReady(&pad);
+    waitPadReady(pad);
     padEnterPressMode(port, slot);
 
-    waitPadReady(&pad);
+    waitPadReady(pad);
     numActuators = padInfoAct(port, slot, -1, 0);
 
     if (numActuators != 0) {
@@ -419,18 +415,11 @@ pad initializePad(int port, int slot, void *padBuf)
         actAlign[4] = 0xff;
         actAlign[5] = 0xff;
 
-        waitPadReady(&pad);
+        waitPadReady(pad);
         padSetActAlign(port, slot, actAlign);
     }
 
-    waitPadReady(&pad);
+    waitPadReady(pad);
 
-    return pad;
-}
-
-int update_pad(pad *pad)
-{
-    int ret = padRead(pad->port, pad->slot, &pad->buttons);
-    pad->paddata = 0xffff ^ pad->buttons.btns;
-    return ret;
+    return 1;
 }
