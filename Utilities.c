@@ -350,6 +350,7 @@ void loadPadModules()
 typedef struct {
     int port;
     int slot;
+    struct padButtonStatus buttons;
 } pad;
 
 void waitPadReady(pad *pad)

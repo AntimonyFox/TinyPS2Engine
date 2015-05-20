@@ -168,7 +168,6 @@ int render(canvas *c)
     pad.port = 0;
     pad.slot = 0;
 
-    struct padButtonStatus buttons;
     u32 paddata;
     u32 old_pad = 0;
     u32 new_pad;
@@ -200,7 +199,7 @@ int render(canvas *c)
             }
             ret=padGetState(port, slot);
         }
-        ret = padRead(port, slot, &buttons); // port, slot, buttons
+        ret = padRead(port, slot, &pad.buttons); // port, slot, buttons
 
 
         // Begin drawing
@@ -218,14 +217,14 @@ int render(canvas *c)
         drawObject(c, &e_bg);
 
         if (ret != 0) {
-            paddata = 0xffff ^ buttons.btns;
+            paddata = 0xffff ^ pad.buttons.btns;
 
             new_pad = paddata & ~old_pad;
             old_pad = paddata;
 
 //            if(buttons.rjoy_h > 0xf0)
-            float rX = buttons.rjoy_h / 127.0f - 1;
-            float rY = -(buttons.rjoy_v / 127.0f - 1);
+            float rX = pad.buttons.rjoy_h / 127.0f - 1;
+            float rY = -(pad.buttons.rjoy_v / 127.0f - 1);
             if (hypot(rX, rY) > 0.4f)
                 e_player_0_0.angle = (float)atan2(rY, rX);
 
