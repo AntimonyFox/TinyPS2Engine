@@ -52,15 +52,12 @@ extern unsigned char player_0_0[];
 
 
 
+
+static pad_buffer padBuf;
+
 VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
-
-void init_dma()
-{
-    dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
-    dma_channel_fast_waits(DMA_CHANNEL_GIF);
-}
 
 canvas create_canvas(int width, int height)
 {
@@ -163,29 +160,21 @@ int render(canvas *c)
 
 
     // Set up pads
-    int ret = 0;
-    struct padButtonStatus buttons;
-
-    u32 paddata;
-    u32 old_pad = 0;
-    u32 new_pad;
-
     loadPadModules();
 
     int port = 0;
     int slot = 0;
-    pad pad = initializePad(port, slot, padBuf);
+    pad pad = initialize_pad(port, slot, padBuf);
 
 
-
+    int success = 0;
 
     // The main loop...
     for (;;)
     {
 
         // Check on pad
-        waitPadReady(&pad);
-        ret = padRead(port, slot, &buttons); // port, slot, buttons
+        success = update_pad(&pad);
 
 
         // Begin drawing
@@ -202,14 +191,9 @@ int render(canvas *c)
         // Draw objects
         drawObject(c, &e_bg);
 
-        if (ret != 0) {
-            paddata = 0xffff ^ buttons.btns;
-
-            new_pad = paddata & ~old_pad;
-            old_pad = paddata;
-
-            double rX = buttons.rjoy_h / 127.0f - 1;
-            double rY = -(buttons.rjoy_v / 127.0f - 1);
+        if (success != 0) {
+            double rX = pad.buttons.rjoy_h / 127.0f - 1;
+            double rY = -(pad.buttons.rjoy_v / 127.0f - 1);
             if (hypot(rX, rY) > 0.4f)
                 e_player_0_0.angle = atan2(rY, rX);
 

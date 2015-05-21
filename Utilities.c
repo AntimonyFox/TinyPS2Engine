@@ -37,6 +37,12 @@ typedef struct {
     memory memory;
 } canvas;
 
+void init_dma()
+{
+    dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
+    dma_channel_fast_waits(DMA_CHANNEL_GIF);
+}
+
 packet_t * create_packet(int size)
 {
     return packet_init(size, PACKET_NORMAL);
@@ -328,9 +334,7 @@ entity create_entity(sprite *s)
     return e;
 }
 
-static char padBuf[256] __attribute__((aligned(64)));
 static char actAlign[6];
-static int numActuators;
 void loadPadModules()
 {
     SifInitRpc(0);
@@ -347,13 +351,19 @@ void loadPadModules()
     padInit(0);
 }
 
+typedef char __attribute__((aligned(64))) pad_buffer[256];
 typedef struct {
     int port;
     int slot;
-//    struct padButtonStatus buttons;
+    int numActuators;
+    pad_buffer *padBuf;
+    struct padButtonStatus buttons;
+    u32 paddata;
+    u32 old_pad;
+    u32 new_pad;
 } pad;
 
-void waitPadReady(pad *pad)
+void wait_pad_ready(pad *pad)
 {
     int port = pad->port;
     int slot = pad->slot;
@@ -364,12 +374,14 @@ void waitPadReady(pad *pad)
     } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
 }
 
-pad initializePad(int port, int slot, void *padBuf)
+pad initialize_pad(int port, int slot, void *padBuf)
 {
 
     pad pad;
     pad.port = port;
     pad.slot = slot;
+    pad.old_pad = 0;
+    pad.padBuf = padBuf;
 
 
     // Will break here if there's something wrong with padBuf
@@ -379,7 +391,7 @@ pad initializePad(int port, int slot, void *padBuf)
 
 
 
-    waitPadReady(&pad);
+    wait_pad_ready(&pad);
 
     int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
 
@@ -400,16 +412,16 @@ pad initializePad(int port, int slot, void *padBuf)
 
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
-    waitPadReady(&pad);
+    wait_pad_ready(&pad);
     padInfoPressMode(port, slot);
 
-    waitPadReady(&pad);
+    wait_pad_ready(&pad);
     padEnterPressMode(port, slot);
 
-    waitPadReady(&pad);
-    numActuators = padInfoAct(port, slot, -1, 0);
+    wait_pad_ready(&pad);
+    pad.numActuators = padInfoAct(port, slot, -1, 0);
 
-    if (numActuators != 0) {
+    if (pad.numActuators != 0) {
         actAlign[0] = 0;   // Enable small engine
         actAlign[1] = 1;   // Enable big engine
         actAlign[2] = 0xff;
@@ -417,11 +429,24 @@ pad initializePad(int port, int slot, void *padBuf)
         actAlign[4] = 0xff;
         actAlign[5] = 0xff;
 
-        waitPadReady(&pad);
+        wait_pad_ready(&pad);
         padSetActAlign(port, slot, actAlign);
     }
 
-    waitPadReady(&pad);
+    wait_pad_ready(&pad);
 
     return pad;
+}
+
+int update_pad(pad *pad)
+{
+    wait_pad_ready(pad);
+    struct padButtonStatus *buttons = &pad->buttons;
+    int ret = padRead(pad->port, pad->slot, buttons);
+    if (ret) {
+        pad->paddata = 0xffff ^ buttons->btns;
+        pad->new_pad = pad->paddata & ~pad->old_pad;
+        pad->old_pad = pad->paddata;
+    }
+    return ret;
 }
