@@ -35,6 +35,8 @@
 
 #include <libpad.h>
 
+//#include <debug.h>
+
 
 #include "Utilities.c"
 #include "square_data.c"
@@ -161,12 +163,8 @@ int render(canvas *c)
 
 
     // Set up pads
-    int ret;
-
-//    int port, slot;
-    pad pad;
-    pad.port = 0;
-    pad.slot = 0;
+    int ret = 0;
+    struct padButtonStatus buttons;
 
     u32 paddata;
     u32 old_pad = 0;
@@ -174,17 +172,11 @@ int render(canvas *c)
 
     loadPadModules();
 
-//    port = 0; // 0 -> Connector 1, 1 -> Connector 2
-//    slot = 0; // Always zero if not using multitap
-
-    ret = initializePad(&pad, padBuf);
-    if(ret == 0)
-        SleepThread();
+    int port = 0;
+    int slot = 0;
+    pad pad = initializePad(port, slot, padBuf);
 
 
-
-    int port = pad.port;
-    int slot = pad.slot;
 
 
     // The main loop...
@@ -192,14 +184,8 @@ int render(canvas *c)
     {
 
         // Check on pad
-        ret=padGetState(port, slot);
-        while((ret != PAD_STATE_STABLE) && (ret != PAD_STATE_FINDCTP1)) {
-            if(ret==PAD_STATE_DISCONN) {
-                printf("Pad(%d, %d) is disconnected\n", port, slot);
-            }
-            ret=padGetState(port, slot);
-        }
-        ret = padRead(port, slot, &pad.buttons); // port, slot, buttons
+        waitPadReady(&pad);
+        ret = padRead(port, slot, &buttons); // port, slot, buttons
 
 
         // Begin drawing
@@ -217,26 +203,29 @@ int render(canvas *c)
         drawObject(c, &e_bg);
 
         if (ret != 0) {
-            paddata = 0xffff ^ pad.buttons.btns;
+            paddata = 0xffff ^ buttons.btns;
 
             new_pad = paddata & ~old_pad;
             old_pad = paddata;
 
-//            if(buttons.rjoy_h > 0xf0)
-            float rX = pad.buttons.rjoy_h / 127.0f - 1;
-            float rY = -(pad.buttons.rjoy_v / 127.0f - 1);
+            double rX = buttons.rjoy_h / 127.0f - 1;
+            double rY = -(buttons.rjoy_v / 127.0f - 1);
             if (hypot(rX, rY) > 0.4f)
-                e_player_0_0.angle = (float)atan2(rY, rX);
+                e_player_0_0.angle = atan2(rY, rX);
+
 
             // Directions
-            if (new_pad & PAD_LEFT)
-                e_player_0_0.angle = (float)atan2(0, -1);
-            if (new_pad & PAD_RIGHT)
-                e_player_0_0.angle = (float)atan2(0, 1);
-            if (new_pad & PAD_UP)
-                e_player_0_0.angle = (float)atan2(1, 0);
-            if (new_pad & PAD_DOWN)
-                e_player_0_0.angle = (float)atan2(-1, 0);
+//            if (new_pad & PAD_LEFT)
+//                e_player_0_0.angle = (float)atan2(0, -1);
+//            if (new_pad & PAD_RIGHT)
+//                e_player_0_0.angle = (float)atan2(0, 1);
+//            if (new_pad & PAD_UP)
+//                e_player_0_0.angle = (float)atan2(1, 0);
+//            if (new_pad & PAD_DOWN)
+//                e_player_0_0.angle = (float)atan2(-1, 0);
+
+
+//            scr_printf("%f\t%f\t%f\n", rX, rY, sqrt(pow(rX,2) + pow(rY,2)));
         }
         drawObject(c, &e_player_0_0);
 
