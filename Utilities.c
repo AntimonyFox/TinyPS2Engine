@@ -337,7 +337,6 @@ entity create_entity(sprite *s)
     return e;
 }
 
-static char actAlign[6];
 void loadPadModules()
 {
     SifInitRpc(0);
@@ -359,11 +358,16 @@ typedef struct {
     int port;
     int slot;
     int numActuators;
+    char actAlign[6];
     pad_buffer *padBuf;
     struct padButtonStatus buttons;
     u32 paddata;
     u32 old_pad;
     u32 new_pad;
+    clock_t smallMotorStart;
+    clock_t bigMotorStart;
+    float smallMotorDur;
+    float bigMotorDur;
 } pad;
 
 void wait_pad_ready(pad *pad)
@@ -385,6 +389,9 @@ pad initialize_pad(int port, int slot, void *padBuf)
     pad.slot = slot;
     pad.old_pad = 0;
     pad.padBuf = padBuf;
+    pad.smallMotorDur = -1;
+    pad.bigMotorDur = -1;
+
 
 
     // Will break here if there's something wrong with padBuf
@@ -425,20 +432,66 @@ pad initialize_pad(int port, int slot, void *padBuf)
     pad.numActuators = padInfoAct(port, slot, -1, 0);
 
     if (pad.numActuators != 0) {
-        actAlign[0] = 0;   // Enable small engine
-        actAlign[1] = 1;   // Enable big engine
-        actAlign[2] = 0xff;
-        actAlign[3] = 0xff;
-        actAlign[4] = 0xff;
-        actAlign[5] = 0xff;
+        pad.actAlign[0] = 0;   // Enable small engine
+        pad.actAlign[1] = 1;   // Enable big engine
+        pad.actAlign[2] = 0xff;
+        pad.actAlign[3] = 0xff;
+        pad.actAlign[4] = 0xff;
+        pad.actAlign[5] = 0xff;
 
         wait_pad_ready(&pad);
-        padSetActAlign(port, slot, actAlign);
+        padSetActAlign(port, slot, pad.actAlign);
     }
 
     wait_pad_ready(&pad);
 
     return pad;
+}
+
+void set_small_motor(pad *pad, int value)
+{
+    pad->actAlign[0] = value;
+    padSetActDirect(pad->port, pad->slot, pad->actAlign);
+}
+
+void start_small_motor(pad *pad)
+{
+    set_small_motor(pad, 1);
+}
+
+void stop_small_motor(pad *pad)
+{
+    set_small_motor(pad, 0);
+}
+
+void run_small_motor(pad *pad, float seconds)
+{
+    set_small_motor(pad, 1);
+    pad->smallMotorStart = clock();
+    pad->smallMotorDur = seconds;
+}
+
+void set_big_motor(pad *pad, int value)
+{
+    pad->actAlign[1] = value;
+    padSetActDirect(pad->port, pad->slot, pad->actAlign);
+}
+
+void start_big_motor(pad *pad)
+{
+    set_big_motor(pad, 255);
+}
+
+void stop_big_motor(pad *pad)
+{
+    set_big_motor(pad, 0);
+}
+
+void run_big_motor(pad *pad, int strength, float seconds)
+{
+    set_big_motor(pad, strength);
+    pad->bigMotorStart = clock();
+    pad->bigMotorDur = seconds;
 }
 
 int update_pad(pad *pad)
@@ -451,5 +504,20 @@ int update_pad(pad *pad)
         pad->new_pad = pad->paddata & ~pad->old_pad;
         pad->old_pad = pad->paddata;
     }
+
+    // Rumble
+    if (pad->smallMotorDur != -1) {
+        if ((float)(clock() - pad->smallMotorStart) / CLOCKS_PER_SEC >= pad->smallMotorDur) {
+            pad->smallMotorDur = -1;
+            stop_small_motor(pad);
+        }
+    }
+    if (pad->bigMotorDur != -1) {
+        if ((float)(clock() - pad->bigMotorStart) / CLOCKS_PER_SEC >= pad->bigMotorDur) {
+            pad->bigMotorDur = -1;
+            stop_big_motor(pad);
+        }
+    }
+
     return ret;
 }

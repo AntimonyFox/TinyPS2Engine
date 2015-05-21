@@ -32,6 +32,7 @@
 #include <loadfile.h>
 #include <stdio.h>
 #include <math.h>
+#include <time.h>
 
 #include <libpad.h>
 
@@ -206,6 +207,26 @@ int render(canvas *c)
             if (fabs(lY) > 0.4f)
                 e_player_0_0.position[1] += lY * speed;
 
+
+            if (pad.new_pad & PAD_R1) {
+                start_big_motor(&pad);
+            }
+            if (pad.new_pad & PAD_L1) {
+                stop_big_motor(&pad);
+            }
+            if (pad.new_pad & PAD_L3) {
+                run_big_motor(&pad, 255, 1.0f);
+            }
+
+            if (pad.new_pad & PAD_R2) {
+                start_small_motor(&pad);
+            }
+            if (pad.new_pad & PAD_L2) {
+                stop_small_motor(&pad);
+            }
+            if (pad.new_pad & PAD_R3) {
+                run_small_motor(&pad, 0.25f);
+            }
 
 
             // Directions
