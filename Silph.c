@@ -173,12 +173,12 @@ int render(canvas *c)
     for (;;)
     {
 
-        // Check on pad
+        // Get new controller inputs
         success = update_pad(&pad);
 
 
         // Begin drawing
-        create_wand(c);
+        ready_canvas(c);
 
         // Clear screen
         clear(c);
@@ -216,9 +216,7 @@ int render(canvas *c)
 
 
         // End drawing
-        use_wand(c);
-
-        c->current_buffer ^= 1;
+        commit_canvas(c);
 
     }
 

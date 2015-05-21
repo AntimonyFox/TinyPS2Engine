@@ -89,7 +89,7 @@ void set_frustum(canvas *c, float aspect, float left, float right, float bottom,
     create_view_screen(c->memory.P, aspect, left, right, bottom, top, near, far);
 }
 
-void create_wand(canvas *c)
+void ready_canvas(canvas *c)
 {
     wand *w = &c->wand;
     packet_t *packet = c->buffers[c->current_buffer];
@@ -99,7 +99,7 @@ void create_wand(canvas *c)
     w->q++;
 }
 
-void use_wand(canvas *c)
+void commit_canvas(canvas *c)
 {
     wand *w = &c->wand;
 
@@ -113,6 +113,9 @@ void use_wand(canvas *c)
     // Sync processors
     draw_wait_finish();
     graph_wait_vsync();
+
+    // Toggle buffers
+    c->current_buffer ^= 1;
 }
 
 void set_clear_color(canvas *c, int r, int g, int b)
