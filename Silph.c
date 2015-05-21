@@ -168,6 +168,7 @@ int render(canvas *c)
 
 
     int success = 0;
+    double speed = 1.0f;
 
     // The main loop...
     for (;;)
@@ -192,10 +193,19 @@ int render(canvas *c)
         drawObject(c, &e_bg);
 
         if (success != 0) {
+            double lX = pad.buttons.ljoy_h / 127.0f - 1;
+            double lY = -(pad.buttons.ljoy_v / 127.0f - 1);
+
             double rX = pad.buttons.rjoy_h / 127.0f - 1;
             double rY = -(pad.buttons.rjoy_v / 127.0f - 1);
             if (hypot(rX, rY) > 0.4f)
                 e_player_0_0.angle = atan2(rY, rX);
+
+            if (fabs(lX) > 0.4f)
+                e_player_0_0.position[0] += lX * speed;
+            if (fabs(lY) > 0.4f)
+                e_player_0_0.position[1] += lY * speed;
+
 
 
             // Directions
