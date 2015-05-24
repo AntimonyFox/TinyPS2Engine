@@ -64,7 +64,9 @@ int render(canvas *c)
 
 
     // Create perspective
-    set_frustum(c, graph_aspect_ratio(), -3.00f, 3.00f, -3.00f, 3.00f, 1.00f, 2000.00f);
+    float s = 1.0f / 14.5f;
+    s *= 640.0f / 2.0f;
+    set_frustum(c, graph_aspect_ratio(), -s, s, -s, s, 1.00f, 2000.00f);
 
     wait();
 
@@ -77,12 +79,12 @@ int render(canvas *c)
 
     // Create entities
     entity e_bg = create_entity(&bg_sprite);
-    e_bg.scale[0] = 43.5f;
-    e_bg.scale[1] = 43.5f;
+    e_bg.scale[0] = 640.0f;
+    e_bg.scale[1] = 640.0f;
 
     entity e_player_0_0 = create_entity(&player_0_0_s);
-    e_player_0_0.scale[0] = 5;
-    e_player_0_0.scale[1] = 5;
+    e_player_0_0.scale[0] = 50;
+    e_player_0_0.scale[1] = 50;
 
 
 
@@ -95,7 +97,7 @@ int render(canvas *c)
 
 
     int success = 0;
-    double speed = 1.0f;
+    double speed = 25.0f;
 
     // The main loop...
     for (;;)
@@ -119,6 +121,8 @@ int render(canvas *c)
         // Draw objects
         drawObject(c, &e_bg);
 
+        VECTOR newPos;
+
         if (success != 0) {
             double lX = pad.buttons.ljoy_h / 127.0f - 1;
             double lY = -(pad.buttons.ljoy_v / 127.0f - 1);
@@ -129,30 +133,33 @@ int render(canvas *c)
                 e_player_0_0.angle = atan2(rY, rX);
 
             if (fabs(lX) > 0.4f)
-                e_player_0_0.position[0] += lX * speed;
+                newPos[0] += lX * speed;
             if (fabs(lY) > 0.4f)
-                e_player_0_0.position[1] += lY * speed;
+                newPos[1] += lY * speed;
+
+            float hW = 640.0f / 2.0f;
+            float hH = hW / (1.44f * graph_aspect_ratio());
 
 
-            if (pad.new_pad & PAD_R1) {
+            newPos[0] = (newPos[0] < -hW) ? -hW : (newPos[0] > hW) ? hW : newPos[0];
+            newPos[1] = (newPos[1] < -hH) ? -hH : (newPos[1] > hH) ? hH : newPos[1];
+            e_player_0_0.position[0] = newPos[0];
+            e_player_0_0.position[1] = newPos[1];
+
+
+            if (pad.new_pad & PAD_R1)
                 start_big_motor(&pad);
-            }
-            if (pad.new_pad & PAD_L1) {
+            if (pad.new_pad & PAD_L1)
                 stop_big_motor(&pad);
-            }
-            if (pad.new_pad & PAD_L3) {
+            if (pad.new_pad & PAD_L3)
                 run_big_motor(&pad, 255, 1.0f);
-            }
 
-            if (pad.new_pad & PAD_R2) {
+            if (pad.new_pad & PAD_R2)
                 start_small_motor(&pad);
-            }
-            if (pad.new_pad & PAD_L2) {
+            if (pad.new_pad & PAD_L2)
                 stop_small_motor(&pad);
-            }
-            if (pad.new_pad & PAD_R3) {
+            if (pad.new_pad & PAD_R3)
                 run_small_motor(&pad, 0.25f);
-            }
 
 
             // Directions
