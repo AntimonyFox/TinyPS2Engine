@@ -53,9 +53,6 @@ extern unsigned char player_0_0[];
 
 
 
-
-static pad_buffer padBuf;
-
 VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
@@ -165,7 +162,7 @@ int render(canvas *c)
 
     int port = 0;
     int slot = 0;
-    pad pad = initialize_pad(port, slot, padBuf);
+    pad pad = create_pad(port, slot);
 
 
     int success = 0;
@@ -242,6 +239,7 @@ int render(canvas *c)
 
 //            scr_printf("%f\t%f\t%f\n", rX, rY, sqrt(pow(rX,2) + pow(rY,2)));
         }
+        e_player_0_0.angle += 0.012f;
         drawObject(c, &e_player_0_0);
 
 

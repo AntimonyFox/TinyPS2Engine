@@ -357,6 +357,7 @@ typedef char __attribute__((aligned(64))) pad_buffer[256];
 typedef struct {
     int port;
     int slot;
+    int hasBeenDisconnected;
     int numActuators;
     char actAlign[6];
     pad_buffer *padBuf;
@@ -370,6 +371,14 @@ typedef struct {
     float bigMotorDur;
 } pad;
 
+int pad_still_connected(pad *pad)
+{
+    int state = padGetState(pad->port, pad->slot);
+    int success = (state == PAD_STATE_STABLE);
+    pad->hasBeenDisconnected |= !success;
+    return success;
+}
+
 void wait_pad_ready(pad *pad)
 {
     int port = pad->port;
@@ -377,31 +386,18 @@ void wait_pad_ready(pad *pad)
 
     int state;
     do {
-        state=padGetState(port, slot);
+        state = padGetState(port, slot);
     } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
 }
 
-pad initialize_pad(int port, int slot, void *padBuf)
+int initialize_pad(pad *pad)
 {
-
-    pad pad;
-    pad.port = port;
-    pad.slot = slot;
-    pad.old_pad = 0;
-    pad.padBuf = padBuf;
-    pad.smallMotorDur = -1;
-    pad.bigMotorDur = -1;
+    int port = pad->port;
+    int slot = pad->slot;
 
 
 
-    // Will break here if there's something wrong with padBuf
-    int ret = padPortOpen(port, slot, padBuf);
-    if (ret == 0)
-        SleepThread();
-
-
-
-    wait_pad_ready(&pad);
+    wait_pad_ready(pad);
 
     int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
 
@@ -414,38 +410,67 @@ pad initialize_pad(int port, int slot, void *padBuf)
             break;
     };
     if (i >= numModes)
-        return pad;
+        return 0;
 
-    ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
+    int ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
     if (ret == 0)
-        return pad;
+        return 0;
 
     padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
 
-    wait_pad_ready(&pad);
+    wait_pad_ready(pad);
     padInfoPressMode(port, slot);
 
-    wait_pad_ready(&pad);
+    wait_pad_ready(pad);
     padEnterPressMode(port, slot);
 
-    wait_pad_ready(&pad);
-    pad.numActuators = padInfoAct(port, slot, -1, 0);
+    wait_pad_ready(pad);
+    pad->numActuators = padInfoAct(port, slot, -1, 0);
 
-    if (pad.numActuators != 0) {
-        pad.actAlign[0] = 0;   // Enable small engine
-        pad.actAlign[1] = 1;   // Enable big engine
-        pad.actAlign[2] = 0xff;
-        pad.actAlign[3] = 0xff;
-        pad.actAlign[4] = 0xff;
-        pad.actAlign[5] = 0xff;
+    if (pad->numActuators != 0) {
+        pad->actAlign[0] = 0;   // Enable small engine
+        pad->actAlign[1] = 1;   // Enable big engine
+        pad->actAlign[2] = 0xff;
+        pad->actAlign[3] = 0xff;
+        pad->actAlign[4] = 0xff;
+        pad->actAlign[5] = 0xff;
 
-        wait_pad_ready(&pad);
-        padSetActAlign(port, slot, pad.actAlign);
+        wait_pad_ready(pad);
+        padSetActAlign(port, slot, pad->actAlign);
     }
 
-    wait_pad_ready(&pad);
+    wait_pad_ready(pad);
+
+    return 0;
+}
+
+pad create_pad(int port, int slot)
+{
+
+    pad pad;
+    pad.port = port;
+    pad.slot = slot;
+    pad.old_pad = 0;
+    pad.padBuf = memalign(64, 256);
+    pad.smallMotorDur = -1;
+    pad.bigMotorDur = -1;
+
+
+    // Will break here if there's something wrong with padBuf
+    int ret = padPortOpen(port, slot, pad.padBuf);
+    if (ret == 0)
+        SleepThread();
+
+
+    initialize_pad(&pad);
+
 
     return pad;
+}
+
+void reinitialize_pad(pad *pad)
+{
+    initialize_pad(pad);
 }
 
 void set_small_motor(pad *pad, int value)
@@ -496,7 +521,14 @@ void run_big_motor(pad *pad, int strength, float seconds)
 
 int update_pad(pad *pad)
 {
-    wait_pad_ready(pad);
+    if (!pad_still_connected(pad))
+        return 0;
+
+    if (pad->hasBeenDisconnected) {
+        pad->hasBeenDisconnected = 0;
+        reinitialize_pad(pad);
+    }
+
     struct padButtonStatus *buttons = &pad->buttons;
     int ret = padRead(pad->port, pad->slot, buttons);
     if (ret) {
