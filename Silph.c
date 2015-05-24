@@ -39,9 +39,8 @@
 //#include <debug.h>
 
 
-#include "Utilities.c"
 #include "square_data.c"
-
+#include "Utilities.c"
 
 
 #include "bg.c"
@@ -56,76 +55,6 @@ extern unsigned char player_0_0[];
 VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
-
-canvas create_canvas(int width, int height)
-{
-
-    canvas c;
-
-    framebuffer_t *frame = &c.frame;
-    zbuffer_t *z = &c.z;
-    memory *m = &c.memory;
-
-    // Define a 32-bit 640x512 framebuffer.
-    frame->width = width;
-    frame->height = height;
-    frame->mask = 0;
-    frame->psm = GS_PSM_32;
-    frame->address = graph_vram_allocate(frame->width, frame->height, frame->psm, GRAPH_ALIGN_PAGE);
-
-    // Enable the zbuffer.
-    z->enable = DRAW_ENABLE;
-    z->mask = 0;
-    z->method = ZTEST_METHOD_GREATER_EQUAL;
-    z->zsm = GS_ZBUF_32;
-    z->address = graph_vram_allocate(frame->width,frame->height,z->zsm, GRAPH_ALIGN_PAGE);
-
-    // Create workspace
-    //TODO: set the vertex_count to the largest geometry's vertex count
-    m->temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
-    m->verts  = make_buffer(sizeof(u64), vertex_count);
-    m->colors = make_buffer(sizeof(u64), vertex_count);
-    m->coordinates = make_buffer(sizeof(u64), vertex_count);
-    //TODO: what does this do?
-//    m->color.r = 0x80;
-//    m->color.g = 0x80;
-//    m->color.b = 0x80;
-//    m->color.a = 0x80;
-//    m->color.q = 1.0f;
-
-    // Define the triangle primitive we want to use.
-    prim_t *p = &c.prim;
-    p->type = PRIM_TRIANGLE;
-    p->shading = PRIM_SHADE_GOURAUD;
-    p->mapping = DRAW_ENABLE;
-    p->fogging = DRAW_DISABLE;
-    p->blending = DRAW_DISABLE;         //this must be disabled to correctly enable transparency
-    p->antialiasing = DRAW_DISABLE;
-    p->mapping_type = PRIM_MAP_ST;
-    p->colorfix = PRIM_UNFIXED;
-
-    // Set sprite geometry settings (pulled from square_data.c)
-    geometry *g = &c.sprite_geometry;
-    g->vertex_count = vertex_count;
-    g->vertices = vertices;
-    g->colors = colors;
-    g->coordinates = coordinates;
-    g->index_count = points_count;
-    g->indices = points;
-
-    // Create double-buffer
-    c.buffers[0] = create_packet(3000);
-    c.buffers[1] = create_packet(3000);
-
-    // Initialize the screen and tie the first framebuffer to the read circuits.
-    graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
-
-    // Register canvas with the coprocessor
-    register_canvas(&c);
-
-    return c;
-
-}
 
 int render(canvas *c)
 {
