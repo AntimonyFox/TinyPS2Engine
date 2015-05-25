@@ -1,3 +1,27 @@
+#include <dma.h>
+#include <dma_tags.h>
+#include <draw.h>
+#include <draw3d.h>
+#include <gif_tags.h>
+#include <graph.h>
+#include <gs_psm.h>
+#include <kernel.h>
+#include <libpad.h>
+#include <loadfile.h>
+#include <math.h>
+#include <math3d.h>
+#include <packet.h>
+#include <sifrpc.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <tamtypes.h>
+#include <time.h>
+
+//#include <debug.h>
+
+
+#include "square_data.c"
+
 typedef struct {
     VECTOR *temp_vertices;
     xyz_t *verts;
@@ -153,6 +177,11 @@ canvas create_canvas(int width, int height)
 
     // Register canvas with the coprocessor
     register_canvas(&c);
+
+    // Create perspective
+    float s = 1.0f / 15.65f;
+    s *= 640.0f / 2.0f;
+    set_frustum(&c, 1.00f, -s, s, -s, s, 1.00f, 2000.00f);
 
     return c;
 

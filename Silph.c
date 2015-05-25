@@ -9,45 +9,12 @@
 #
 */
 
-#include <kernel.h>
-#include <stdlib.h>
-#include <tamtypes.h>
-#include <math3d.h>
-
-#include <packet.h>
-
-#include <dma_tags.h>
-#include <gif_tags.h>
-#include <gs_psm.h>
-
-#include <dma.h>
-
-#include <graph.h>
-
-#include <draw.h>
-#include <draw3d.h>
-
-// Pad libraries
-#include <sifrpc.h>
-#include <loadfile.h>
-#include <stdio.h>
-#include <math.h>
-#include <time.h>
-
-#include <libpad.h>
-
-//#include <debug.h>
-
-
-#include "square_data.c"
 #include "Utilities.c"
 
 
-#include "bg.c"
+#include "bg.ci"
 extern unsigned char bg[];
-#include "flower.c"
-extern unsigned char flower[];
-#include "player_0_0.c"
+#include "player_0_0.ci"
 extern unsigned char player_0_0[];
 
 
@@ -56,17 +23,11 @@ VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
 
-int render(canvas *c)
+void render(canvas *c)
 {
 
     // Matrices to set up the 3D environment and camera
     MATRIX *CAM = &c->memory.CAM;
-
-
-    // Create perspective
-    float s = 1.0f / 15.65f;
-    s *= 640.0f / 2.0f;
-    set_frustum(c, 1.00f, -s, s, -s, s, 1.00f, 2000.00f);
 
     wait();
 
@@ -74,7 +35,6 @@ int render(canvas *c)
 
     // Load textures
     sprite bg_sprite = load_sprite(bg, 512, 512, 512, 356, 0, 78);
-//    sprite flower_sprite = load_sprite(flower, 256, 256, 240, 149, 9, 59);
     sprite player_0_0_s = load_sprite(player_0_0, 128, 64, 89, 44, 19, 10);
 
     // Create entities
@@ -103,6 +63,7 @@ int render(canvas *c)
 
         // Get new controller inputs
         success = update_pad(&pad);
+
 
 
         // Begin drawing
@@ -180,21 +141,8 @@ int render(canvas *c)
             if (pad.new_pad & PAD_R3)
                 run_small_motor(&pad, 0.25f);
 
-
-            // Directions
-//            if (new_pad & PAD_LEFT)
-//                e_player_0_0.angle = (float)atan2(0, -1);
-//            if (new_pad & PAD_RIGHT)
-//                e_player_0_0.angle = (float)atan2(0, 1);
-//            if (new_pad & PAD_UP)
-//                e_player_0_0.angle = (float)atan2(1, 0);
-//            if (new_pad & PAD_DOWN)
-//                e_player_0_0.angle = (float)atan2(-1, 0);
-
-
 //            scr_printf("%f\t%f\t%f\n", rX, rY, sqrt(pow(rX,2) + pow(rY,2)));
         }
-//        e_player_0_0.angle += 0.012f;
         drawObject(c, &e_player_0_0);
 
 
@@ -203,12 +151,6 @@ int render(canvas *c)
         commit_canvas(c);
 
     }
-
-    // ~~ Free if we're done with the for loop, but we never will be
-//    packet_free(packets[0]);
-//    packet_free(packets[1]);
-
-    return 0;
 
 }
 
