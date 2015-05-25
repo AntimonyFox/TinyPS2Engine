@@ -17,6 +17,8 @@
 #include <tamtypes.h>
 #include <time.h>
 
+#include "sprites.c"
+
 //#include <debug.h>
 
 

@@ -16,22 +16,23 @@ PS2SDK=$PS2DEV/ps2sdk
 PATH=$PATH:$PS2SDK/bin
 PATH=$PATH:/bin
 
-
+SPRITES = $(foreach number, $(wildcard sprites/*), $(notdir $(number)))
 EE_BIN = cube.elf
 EE_OBJS = main.o
 EE_LIBS = -ldraw -lgraph -lmath3d -lmf -lpacket -ldma -lpad -lc -lm
 
-all: bg.ci player_0_0.ci $(EE_BIN)
+all: $(SPRITES) $(EE_BIN)
 	ee-strip --strip-all $(EE_BIN)
 
-bg.ci:
-	bin2c textures/bg.raw bg.ci bg
+%.raw:
+	@echo "compile $@"
+	@bin2c sprites/$*.raw $*.ci $*
+	@echo "#include \"$*.ci\"" >> sprites.c
+	@echo "extern unsigned char $*[];" >> sprites.c
 
-player_0_0.ci:
-	bin2c textures/player_0_0.raw player_0_0.ci player_0_0
 
 clean:
-	rm -f *.elf *.o *.a *.ci
+	rm -f *.elf *.o *.a *.ci sprites.c
 
 run: $(EE_BIN)
 	ps2client execee host:$(EE_BIN)

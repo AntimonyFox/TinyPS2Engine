@@ -12,13 +12,6 @@
 #include "Utilities.c"
 
 
-#include "bg.ci"
-extern unsigned char bg[];
-#include "player_0_0.ci"
-extern unsigned char player_0_0[];
-
-
-
 VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
