@@ -37,6 +37,12 @@ typedef struct {
     memory memory;
 } canvas;
 
+void init_dma()
+{
+    dma_channel_initialize(DMA_CHANNEL_GIF, NULL, 0);
+    dma_channel_fast_waits(DMA_CHANNEL_GIF);
+}
+
 packet_t * create_packet(int size)
 {
     return packet_init(size, PACKET_NORMAL);
@@ -64,7 +70,6 @@ void register_canvas(canvas *c)
 
     q = draw_setup_environment(q, 0, &c->frame, &c->z);
     q = draw_primitive_xyoffset(q, 0, (2048-c->frame.width/2), (2048-c->frame.height/2));
-    //TODO: close_packet?
     q = draw_finish(q);
 
     send_packet(packet, q);
@@ -83,7 +88,77 @@ void set_frustum(canvas *c, float aspect, float left, float right, float bottom,
     create_view_screen(c->memory.P, aspect, left, right, bottom, top, near, far);
 }
 
-void create_wand(canvas *c)
+canvas create_canvas(int width, int height)
+{
+
+    canvas c;
+
+    framebuffer_t *frame = &c.frame;
+    zbuffer_t *z = &c.z;
+    memory *m = &c.memory;
+
+    // Define a 32-bit 640x512 framebuffer.
+    frame->width = width;
+    frame->height = height;
+    frame->mask = 0;
+    frame->psm = GS_PSM_32;
+    frame->address = graph_vram_allocate(frame->width, frame->height, frame->psm, GRAPH_ALIGN_PAGE);
+
+    // Enable the zbuffer.
+    z->enable = DRAW_ENABLE;
+    z->mask = 0;
+    z->method = ZTEST_METHOD_GREATER_EQUAL;
+    z->zsm = GS_ZBUF_32;
+    z->address = graph_vram_allocate(frame->width,frame->height,z->zsm, GRAPH_ALIGN_PAGE);
+
+    // Create workspace
+    //TODO: set the vertex_count to the largest geometry's vertex count
+    m->temp_vertices = make_buffer(sizeof(VECTOR), vertex_count);
+    m->verts  = make_buffer(sizeof(u64), vertex_count);
+    m->colors = make_buffer(sizeof(u64), vertex_count);
+    m->coordinates = make_buffer(sizeof(u64), vertex_count);
+    //TODO: what does this do?
+//    m->color.r = 0x80;
+//    m->color.g = 0x80;
+//    m->color.b = 0x80;
+//    m->color.a = 0x80;
+//    m->color.q = 1.0f;
+
+    // Define the triangle primitive we want to use.
+    prim_t *p = &c.prim;
+    p->type = PRIM_TRIANGLE;
+    p->shading = PRIM_SHADE_GOURAUD;
+    p->mapping = DRAW_ENABLE;
+    p->fogging = DRAW_DISABLE;
+    p->blending = DRAW_DISABLE;         //this must be disabled to correctly enable transparency
+    p->antialiasing = DRAW_DISABLE;
+    p->mapping_type = PRIM_MAP_ST;
+    p->colorfix = PRIM_UNFIXED;
+
+    // Set sprite geometry settings (pulled from square_data.c)
+    geometry *g = &c.sprite_geometry;
+    g->vertex_count = vertex_count;
+    g->vertices = vertices;
+    g->colors = colors;
+    g->coordinates = coordinates;
+    g->index_count = points_count;
+    g->indices = points;
+
+    // Create double-buffer
+    c.buffers[0] = create_packet(3000);
+    c.buffers[1] = create_packet(3000);
+
+    // Initialize the screen and tie the first framebuffer to the read circuits.
+    graph_initialize(frame->address, frame->width, frame->height, frame->psm, 0, 0);
+
+    // Register canvas with the coprocessor
+    register_canvas(&c);
+
+    return c;
+
+}
+
+void ready_canvas(canvas *c)
 {
     wand *w = &c->wand;
     packet_t *packet = c->buffers[c->current_buffer];
@@ -93,7 +168,7 @@ void create_wand(canvas *c)
     w->q++;
 }
 
-void use_wand(canvas *c)
+void commit_canvas(canvas *c)
 {
     wand *w = &c->wand;
 
@@ -107,6 +182,9 @@ void use_wand(canvas *c)
     // Sync processors
     draw_wait_finish();
     graph_wait_vsync();
+
+    // Toggle buffers
+    c->current_buffer ^= 1;
 }
 
 void set_clear_color(canvas *c, int r, int g, int b)
@@ -156,7 +234,7 @@ typedef struct {
     float right;
     float top;
     float bottom;
-    MATRIX SCALE;
+    VECTOR size;
 } sprite;
 
 typedef struct {
@@ -164,7 +242,28 @@ typedef struct {
     VECTOR position;
     VECTOR scale;
     float angle;
+    VECTOR size;
 } entity;
+
+void set_size(entity *e, float width, float height)
+{
+    e->size[0] = width;
+    e->size[1] = height;
+}
+
+void set_width(entity *e, float width)
+{
+    float aspect = e->sprite->size[0] / e->sprite->size[1];
+    e->size[0] = width;
+    e->size[1] = width / aspect;
+}
+
+void set_height(entity *e, float height)
+{
+    float aspect = e->sprite->size[0] / e->sprite->size[1];
+    e->size[0] = height * aspect;
+    e->size[1] = height;
+}
 
 sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_width, int sprite_height, int left_offset, int top_offset)
 {
@@ -178,20 +277,17 @@ sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_widt
 
 
 
+    // Crop
     s.top = top_offset / (float)raw_height;
     s.bottom = (top_offset + sprite_height) / (float)raw_height;
 
     s.left = left_offset / (float)raw_width;
     s.right = (left_offset + sprite_width) / (float)raw_width;
 
-    float max = (raw_width > raw_height) ? raw_width : raw_height;
-    float default_width = sprite_width / max;
-    float default_height = sprite_height / max;
-
-    VECTOR scale = { default_width, default_height, 1 };
-    MATRIX *SCALE = &s.SCALE;
-    matrix_unit(*SCALE);
-    matrix_scale(*SCALE, *SCALE, scale);
+    // Scale
+    s.size[0] = sprite_width;
+    s.size[1] = sprite_height;
+    s.size[2] = 1;
 
 
 
@@ -287,8 +383,7 @@ void drawObject(canvas *c, entity *e)
     MATRIX *FINAL = &c->memory.FINAL;
 
     matrix_unit(*MV);
-    matrix_multiply(*MV, *MV, e->sprite->SCALE);
-    matrix_scale(*MV, *MV, e->scale);
+    matrix_scale(*MV, *MV, e->size);
     VECTOR rotation = { 0, 0, e->angle };
     matrix_rotate(*MV, *MV, rotation);
     matrix_translate(*MV, *MV, e->position);
@@ -325,5 +420,225 @@ entity create_entity(sprite *s)
     e.sprite = s;
     e.scale[0] = e.scale[1] = 1;
     e.angle = 0;
+    e.size[0] = s->size[0];
+    e.size[1] = s->size[1];
+    e.size[2] = s->size[2];
     return e;
+}
+
+void loadPadModules()
+{
+    SifInitRpc(0);
+
+    int ret;
+    ret = SifLoadModule("rom0:SIO2MAN", 0, NULL);
+    if (ret < 0)
+        SleepThread();  //aka "die"
+
+    ret = SifLoadModule("rom0:PADMAN", 0, NULL);
+    if (ret < 0)
+        SleepThread();
+
+    padInit(0);
+}
+
+typedef char __attribute__((aligned(64))) pad_buffer[256];
+typedef struct {
+    int port;
+    int slot;
+    int hasBeenDisconnected;
+    int numActuators;
+    char actAlign[6];
+    pad_buffer *padBuf;
+    struct padButtonStatus buttons;
+    u32 paddata;
+    u32 old_pad;
+    u32 new_pad;
+    clock_t smallMotorStart;
+    clock_t bigMotorStart;
+    float smallMotorDur;
+    float bigMotorDur;
+} pad;
+
+int pad_still_connected(pad *pad)
+{
+    int state = padGetState(pad->port, pad->slot);
+    int success = (state == PAD_STATE_STABLE);
+    pad->hasBeenDisconnected |= !success;
+    return success;
+}
+
+void wait_pad_ready(pad *pad)
+{
+    int port = pad->port;
+    int slot = pad->slot;
+
+    int state;
+    do {
+        state = padGetState(port, slot);
+    } while ( (state != PAD_STATE_STABLE) && (state != PAD_STATE_FINDCTP1) );
+}
+
+int initialize_pad(pad *pad)
+{
+    int port = pad->port;
+    int slot = pad->slot;
+
+
+
+    wait_pad_ready(pad);
+
+    int numModes = padInfoMode(port, slot, PAD_MODETABLE, -1);
+
+    if (numModes == 0)
+        SleepThread();
+
+    int i;
+    for (i = 0; i < numModes; i++) {
+        if (padInfoMode(port, slot, PAD_MODETABLE, i) == PAD_TYPE_DUALSHOCK)
+            break;
+    };
+    if (i >= numModes)
+        return 0;
+
+    int ret = padInfoMode(port, slot, PAD_MODECUREXID, 0);
+    if (ret == 0)
+        return 0;
+
+    padSetMainMode(port, slot, PAD_MMODE_DUALSHOCK, PAD_MMODE_LOCK);
+
+    wait_pad_ready(pad);
+    padInfoPressMode(port, slot);
+
+    wait_pad_ready(pad);
+    padEnterPressMode(port, slot);
+
+    wait_pad_ready(pad);
+    pad->numActuators = padInfoAct(port, slot, -1, 0);
+
+    if (pad->numActuators != 0) {
+        pad->actAlign[0] = 0;   // Enable small engine
+        pad->actAlign[1] = 1;   // Enable big engine
+        pad->actAlign[2] = 0xff;
+        pad->actAlign[3] = 0xff;
+        pad->actAlign[4] = 0xff;
+        pad->actAlign[5] = 0xff;
+
+        wait_pad_ready(pad);
+        padSetActAlign(port, slot, pad->actAlign);
+    }
+
+    wait_pad_ready(pad);
+
+    return 0;
+}
+
+pad create_pad(int port, int slot)
+{
+
+    pad pad;
+    pad.port = port;
+    pad.slot = slot;
+    pad.old_pad = 0;
+    pad.padBuf = memalign(64, 256);
+    pad.smallMotorDur = -1;
+    pad.bigMotorDur = -1;
+
+
+    // Will break here if there's something wrong with padBuf
+    int ret = padPortOpen(port, slot, pad.padBuf);
+    if (ret == 0)
+        SleepThread();
+
+
+    initialize_pad(&pad);
+
+
+    return pad;
+}
+
+void reinitialize_pad(pad *pad)
+{
+    initialize_pad(pad);
+}
+
+void set_small_motor(pad *pad, int value)
+{
+    pad->actAlign[0] = value;
+    padSetActDirect(pad->port, pad->slot, pad->actAlign);
+}
+
+void start_small_motor(pad *pad)
+{
+    set_small_motor(pad, 1);
+}
+
+void stop_small_motor(pad *pad)
+{
+    set_small_motor(pad, 0);
+}
+
+void run_small_motor(pad *pad, float seconds)
+{
+    set_small_motor(pad, 1);
+    pad->smallMotorStart = clock();
+    pad->smallMotorDur = seconds;
+}
+
+void set_big_motor(pad *pad, int value)
+{
+    pad->actAlign[1] = value;
+    padSetActDirect(pad->port, pad->slot, pad->actAlign);
+}
+
+void start_big_motor(pad *pad)
+{
+    set_big_motor(pad, 255);
+}
+
+void stop_big_motor(pad *pad)
+{
+    set_big_motor(pad, 0);
+}
+
+void run_big_motor(pad *pad, int strength, float seconds)
+{
+    set_big_motor(pad, strength);
+    pad->bigMotorStart = clock();
+    pad->bigMotorDur = seconds;
+}
+
+int update_pad(pad *pad)
+{
+    if (!pad_still_connected(pad))
+        return 0;
+
+    if (pad->hasBeenDisconnected) {
+        pad->hasBeenDisconnected = 0;
+        reinitialize_pad(pad);
+    }
+
+    struct padButtonStatus *buttons = &pad->buttons;
+    int ret = padRead(pad->port, pad->slot, buttons);
+    if (ret) {
+        pad->paddata = 0xffff ^ buttons->btns;
+        pad->new_pad = pad->paddata & ~pad->old_pad;
+        pad->old_pad = pad->paddata;
+    }
+
+    // Rumble
+    if (pad->smallMotorDur != -1) {
+        if ((float)(clock() - pad->smallMotorStart) / CLOCKS_PER_SEC >= pad->smallMotorDur) {
+            pad->smallMotorDur = -1;
+            stop_small_motor(pad);
+        }
+    }
+    if (pad->bigMotorDur != -1) {
+        if ((float)(clock() - pad->bigMotorStart) / CLOCKS_PER_SEC >= pad->bigMotorDur) {
+            pad->bigMotorDur = -1;
+            stop_big_motor(pad);
+        }
+    }
+
+    return ret;
 }
