@@ -64,27 +64,25 @@ int render(canvas *c)
 
 
     // Create perspective
-    float s = 1.0f / 14.5f;
+    float s = 1.0f / 15.65f;
     s *= 640.0f / 2.0f;
-    set_frustum(c, graph_aspect_ratio(), -s, s, -s, s, 1.00f, 2000.00f);
+    set_frustum(c, 1.00f, -s, s, -s, s, 1.00f, 2000.00f);
 
     wait();
 
 
 
     // Load textures
-    sprite bg_sprite = load_sprite(bg, 512, 512, 512, 384, 0, 64);
+    sprite bg_sprite = load_sprite(bg, 512, 512, 512, 356, 0, 78);
 //    sprite flower_sprite = load_sprite(flower, 256, 256, 240, 149, 9, 59);
     sprite player_0_0_s = load_sprite(player_0_0, 128, 64, 89, 44, 19, 10);
 
     // Create entities
     entity e_bg = create_entity(&bg_sprite);
-    e_bg.scale[0] = 640.0f;
-    e_bg.scale[1] = 640.0f;
+    e_bg.scale[0] = e_bg.scale[1] = 640.0f;
 
     entity e_player_0_0 = create_entity(&player_0_0_s);
-    e_player_0_0.scale[0] = 50;
-    e_player_0_0.scale[1] = 50;
+    e_player_0_0.scale[0] = e_player_0_0.scale[1] = 50.0f;
 
 
 
@@ -132,17 +130,38 @@ int render(canvas *c)
             if (hypot(rX, rY) > 0.4f)
                 e_player_0_0.angle = atan2(rY, rX);
 
+            // Request new position
             if (fabs(lX) > 0.4f)
                 newPos[0] += lX * speed;
             if (fabs(lY) > 0.4f)
                 newPos[1] += lY * speed;
 
+
+            // Screen info
+            float aspect = 1.44f;
             float hW = 640.0f / 2.0f;
-            float hH = hW / (1.44f * graph_aspect_ratio());
+            float hH = hW / aspect;
 
+            // Check boundaries (rectangle)
+//            newPos[0] = (newPos[0] < -hW) ? -hW : (newPos[0] > hW) ? hW : newPos[0];
+//            newPos[1] = (newPos[1] < -hH) ? -hH : (newPos[1] > hH) ? hH : newPos[1];
 
-            newPos[0] = (newPos[0] < -hW) ? -hW : (newPos[0] > hW) ? hW : newPos[0];
-            newPos[1] = (newPos[1] < -hH) ? -hH : (newPos[1] > hH) ? hH : newPos[1];
+            // Check boundaries (circle)
+//            if (hypot(newPos[0], newPos[1]) > 200) {
+//                double bearing = atan2(newPos[1], newPos[0]);
+//                newPos[0] = 200 * cos(bearing);
+//                newPos[1] = 200 * sin(bearing);
+//            }
+
+            // Check boundaries (ellipse)
+            float shipRad = 25.0f;
+            if (pow(newPos[0], 2) / pow(hW - shipRad, 2) + pow(newPos[1], 2) / pow(hH - shipRad, 2) > 1.0f) {
+                float proj = newPos[0] / aspect;
+                double bearing = atan2(newPos[1], proj);
+                newPos[0] = (hW - shipRad) * cos(bearing);
+                newPos[1] = (hH - shipRad) * sin(bearing);
+            }
+
             e_player_0_0.position[0] = newPos[0];
             e_player_0_0.position[1] = newPos[1];
 
@@ -175,7 +194,7 @@ int render(canvas *c)
 
 //            scr_printf("%f\t%f\t%f\n", rX, rY, sqrt(pow(rX,2) + pow(rY,2)));
         }
-        e_player_0_0.angle += 0.012f;
+//        e_player_0_0.angle += 0.012f;
         drawObject(c, &e_player_0_0);
 
 

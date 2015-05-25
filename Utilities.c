@@ -256,17 +256,20 @@ sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_widt
 
 
 
+    // Crop
     s.top = top_offset / (float)raw_height;
     s.bottom = (top_offset + sprite_height) / (float)raw_height;
 
     s.left = left_offset / (float)raw_width;
     s.right = (left_offset + sprite_width) / (float)raw_width;
 
-    float max = (raw_width > raw_height) ? raw_width : raw_height;
+    // Scale
+    float max = (sprite_width > sprite_height) ? sprite_width : sprite_height;
     float default_width = sprite_width / max;
     float default_height = sprite_height / max;
-
     VECTOR scale = { default_width, default_height, 1 };
+
+    // Create MATRIX
     MATRIX *SCALE = &s.SCALE;
     matrix_unit(*SCALE);
     matrix_scale(*SCALE, *SCALE, scale);
