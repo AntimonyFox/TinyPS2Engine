@@ -234,7 +234,7 @@ typedef struct {
     float right;
     float top;
     float bottom;
-    MATRIX SCALE;
+    VECTOR size;
 } sprite;
 
 typedef struct {
@@ -242,7 +242,28 @@ typedef struct {
     VECTOR position;
     VECTOR scale;
     float angle;
+    VECTOR size;
 } entity;
+
+void set_size(entity *e, float width, float height)
+{
+    e->size[0] = width;
+    e->size[1] = height;
+}
+
+void set_width(entity *e, float width)
+{
+    float aspect = e->sprite->size[0] / e->sprite->size[1];
+    e->size[0] = width;
+    e->size[1] = width / aspect;
+}
+
+void set_height(entity *e, float height)
+{
+    float aspect = e->sprite->size[0] / e->sprite->size[1];
+    e->size[0] = height * aspect;
+    e->size[1] = height;
+}
 
 sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_width, int sprite_height, int left_offset, int top_offset)
 {
@@ -264,15 +285,9 @@ sprite load_sprite(char *texture, int raw_width, int raw_height, int sprite_widt
     s.right = (left_offset + sprite_width) / (float)raw_width;
 
     // Scale
-    float max = (sprite_width > sprite_height) ? sprite_width : sprite_height;
-    float default_width = sprite_width / max;
-    float default_height = sprite_height / max;
-    VECTOR scale = { default_width, default_height, 1 };
-
-    // Create MATRIX
-    MATRIX *SCALE = &s.SCALE;
-    matrix_unit(*SCALE);
-    matrix_scale(*SCALE, *SCALE, scale);
+    s.size[0] = sprite_width;
+    s.size[1] = sprite_height;
+    s.size[2] = 1;
 
 
 
@@ -368,8 +383,7 @@ void drawObject(canvas *c, entity *e)
     MATRIX *FINAL = &c->memory.FINAL;
 
     matrix_unit(*MV);
-    matrix_multiply(*MV, *MV, e->sprite->SCALE);
-    matrix_scale(*MV, *MV, e->scale);
+    matrix_scale(*MV, *MV, e->size);
     VECTOR rotation = { 0, 0, e->angle };
     matrix_rotate(*MV, *MV, rotation);
     matrix_translate(*MV, *MV, e->position);
@@ -406,6 +420,9 @@ entity create_entity(sprite *s)
     e.sprite = s;
     e.scale[0] = e.scale[1] = 1;
     e.angle = 0;
+    e.size[0] = s->size[0];
+    e.size[1] = s->size[1];
+    e.size[2] = s->size[2];
     return e;
 }
 

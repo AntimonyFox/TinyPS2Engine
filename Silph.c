@@ -79,10 +79,10 @@ int render(canvas *c)
 
     // Create entities
     entity e_bg = create_entity(&bg_sprite);
-    e_bg.scale[0] = e_bg.scale[1] = 640.0f;
+    set_size(&e_bg, 640, 445);
 
     entity e_player_0_0 = create_entity(&player_0_0_s);
-    e_player_0_0.scale[0] = e_player_0_0.scale[1] = 50.0f;
+    set_width(&e_player_0_0, 50);
 
 
 
