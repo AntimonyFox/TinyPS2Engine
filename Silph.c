@@ -16,6 +16,11 @@ VECTOR camera_position = { 0.00f, 0.00f, 100.00f, 1.00f };
 VECTOR camera_rotation = { 0.00f, 0.00f,   0.00f, 1.00f };
 
 
+void update_pellet(entity *p)
+{
+    p->angle += 0.012f;
+}
+
 void render(canvas *c)
 {
 
@@ -29,6 +34,7 @@ void render(canvas *c)
     // Load textures
     sprite bg_sprite = load_sprite(bg, 512, 512, 512, 356, 0, 78);
     sprite player_0_0_s = load_sprite(player_0_0, 128, 64, 89, 44, 19, 10);
+    sprite yellow_pellet_s = load_sprite(yellow_pellet, 16, 16, 16, 16, 0, 0);
 
     // Create entities
     entity e_bg = create_entity(&bg_sprite);
@@ -36,6 +42,8 @@ void render(canvas *c)
 
     entity e_player_0_0 = create_entity(&player_0_0_s);
     set_width(&e_player_0_0, 50);
+
+    entity yellow_pellet_e = create_entity(&yellow_pellet_s);
 
 
 
@@ -137,6 +145,9 @@ void render(canvas *c)
 //            scr_printf("%f\t%f\t%f\n", rX, rY, sqrt(pow(rX,2) + pow(rY,2)));
         }
         drawObject(c, &e_player_0_0);
+
+        update_pellet(&yellow_pellet_e);
+        drawObject(c, &yellow_pellet_e);
 
 
 
